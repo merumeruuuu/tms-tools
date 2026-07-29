@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PHI Scrubber</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h2>PHI Scrubber</h2>
+    
+    <div class="settings-panel">
+      <h3>Dummy Data Settings</h3>
+      <div class="input-group">
+        <label>Name Replacement:</label>
+        <input type="text" id="dummy-name" value="[REDACTED_NAME]">
+      </div>
+      <div class="input-group">
+        <label>SSN/ID Replacement:</label>
+        <input type="text" id="dummy-ssn" value="[REDACTED_ID]">
+      </div>
+      <div class="input-group">
+        <label>Contact Replacement:</label>
+        <input type="text" id="dummy-contact" value="[REDACTED_CONTACT]">
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-text" class="active">Text Input</button>
+      <button id="tab-file">File Upload</button>
+    </div>
+
+    <div id="view-text" class="view active">
+      <textarea id="raw-text" placeholder="Paste your text containing PHI here..."></textarea>
+      <button id="btn-scrub-text" class="primary-btn">Scrub Text</button>
+      <textarea id="clean-text" readonly placeholder="Cleaned text will appear here..."></textarea>
+      <button id="btn-copy">Copy to Clipboard</button>
+    </div>
+
+    <div id="view-file" class="view hidden">
+      <input type="file" id="file-upload" accept=".txt,.csv,.json">
+      <button id="btn-scrub-file" class="primary-btn">Scrub & Download File</button>
+      <div id="file-status"></div>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

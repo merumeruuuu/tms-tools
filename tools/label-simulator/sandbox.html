@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    
+    <meta name="tms-env" 
+          data-dev-mode="false" 
+          data-encryption-key="1LQHS67FJ8X3-O0Z5IYK9B4VDWGTEP_MUCANR2"
+          data-qa-api-key="tms-qa-super-secret-key-2026">
+
+    <title><h1 id="secret-trigger" class="text-xl font-bold cursor-pointer">TMS Virtual Label Simulator</h1></title>
+
+    <script src="./js/shield.js"></script>
+    <script src="./libs/qz-tray.min.js"></script>
+    <script src="./libs/bwip-js-min.js"></script>
+    <script src="./libs/monaco-editor/vs/loader.js"></script>
+    <link rel="stylesheet" href="./css/label-viewer.css">
+</head>
+<body>
+
+<div id="tms-label-app" class="tms-wrapper" v-cloak>
+    <div class="navbar">
+        <img src="../../assets/icons/icon48.png" alt="TMS Logo" class="brand-logo" style="mix-blend-mode: multiply;" />
+        <!-- <h1>TMS Virtual Label Simulator & Barcode Generator</h1> -->
+        <h1 id="secret-trigger" class="text-xl font-bold cursor-pointer">TMS Virtual Label Simulator</h1>
+        <div id="privacy-badge" class="privacy-indicator">
+            <span v-if="isDeveloperMode" style="background-color: #ef4444; color: white; padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: bold;">
+                🛠️ DEV MODE ACTIVE
+            </span>
+            <div class="status-dot dot-offline"></div>
+            <span>100% Local Processing (HIPAA Secure)</span>
+        </div>
+    </div>
+    
+    <div class="workspace">
+        <div class="left-panel">
+            <div v-if="validationErrors.length > 0" class="validation-warning">
+                <strong>⚠️ Hardware Compatibility Warning:</strong>
+                <ul>
+                <li v-for="(err, i) in validationErrors" :key="i">{{ err }}</li>
+                </ul>
+    
+                <div v-if="validationErrors.some(e => e.includes('too wide'))" class="auto-override-notice">
+                    🔄 The canvas width has been clamped to match the selected printer's maximum allowable width.
+                </div>
+            </div>
+            
+            <div v-show="isDemoMode" id="demo-generator-container" style="flex: 1; overflow-y: auto; background-color: #f8fafc; padding: 40px 20px; display: flex; flex-direction: column; align-items: center;">
+                <div class="tms-modern-card">
+                    <div class="tms-card-header">
+                        <h2>Barcode Generator</h2>
+                        <p>Instantly generate barcodes & virtual labels for product demos and testing.</p>
+                    </div>
+
+                    <div class="tms-radio-group">
+                        <label class="tms-radio-pill" :class="{ 'active': demoSettings.labelType === 'product' }">
+                            <input type="radio" v-model="demoSettings.labelType" value="product" style="display: none;">
+                            <span>📦 Product Label</span>
+                        </label>
+                        <label class="tms-radio-pill" :class="{ 'active': demoSettings.labelType === 'milkbank' }">
+                            <input type="radio" v-model="demoSettings.labelType" value="milkbank" style="display: none;">
+                            <span>🍼 Milk Bank Label</span>
+                        </label>
+                    </div>
+
+                    <div class="tms-card-body">
+                        <template v-if="demoSettings.labelType === 'product'">
+                            <div class="tms-input-wrapper" style="z-index: 101;">
+                                <label>Search Product Database</label>
+                                <input type="text" 
+                                       v-model="productSearchQuery" 
+                                       @focus="$event.target.select(); showProductDropdown = true" 
+                                       @input="showProductDropdown = true" 
+                                       class="tms-text-input" 
+                                       :placeholder="productsData.length > 0 ? `Search ${productsData.length} products...` : '⚠️ Loading database...'">
+                                
+                                <div v-if="showProductDropdown" @click="showProductDropdown = false" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 90;"></div>
+                                
+                                <div v-if="showProductDropdown && filteredProducts.length > 0" class="tms-dropdown-menu">
+                                    <div v-for="prod in filteredProducts" :key="prod.productId + prod.name" @mousedown.prevent="selectProduct(prod)" class="tms-dropdown-item">
+                                        <strong style="color: #0f766e;">[{{ prod.category || 'UNK' }}] {{ prod.name }}</strong> <br>
+                                        <span style="color: #64748b; font-size: 0.75rem;">ID: {{ prod.productId || 'N/A' }} | {{ prod.barcodes ? prod.barcodes.length : 0 }} Barcodes</span>
+                                    </div>
+                                </div>
+                                
+                                <div v-if="showProductDropdown && filteredProducts.length === 0" class="tms-dropdown-menu" style="padding: 10px; text-align: center; color: #ef4444;">
+                                    <span v-if="productsData.length === 0">🚨 Database loading error.</span>
+                                    <span v-else>No products found matching "{{ productSearchQuery }}"</span>
+                                </div>
+                            </div>
+
+                            <div class="tms-gtin-lock" v-if="demoSettings.gtin">
+                                <span style="font-size: 1.2rem;">🔒</span>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span style="font-size: 0.7rem; font-weight: 700; color: #0d9488; text-transform: uppercase;">Target GTIN</span>
+                                    <span style="font-family: monospace; font-size: 0.95rem; font-weight: 600; color: #115e59;">{{ demoSettings.gtin }}</span>
+                                </div>
+                            </div>
+
+                            <div class="tms-grid-2">
+                                <div class="tms-input-wrapper">
+                                    <label>Lot Number</label>
+                                    <input type="text" v-model="demoSettings.lot" class="tms-text-input">
+                                </div>
+                                <div class="tms-input-wrapper">
+                                    <label>Start Serial #</label>
+                                    <input type="number" v-model="demoSettings.startSerial" class="tms-text-input">
+                                </div>
+                            </div>
+                        </template>
+
+                        <template v-if="demoSettings.labelType === 'milkbank'">
+                            <div class="tms-input-wrapper" style="z-index: 101;">
+                                <label>Target Milk Bank</label>
+                                <input type="text"
+                                       v-model="milkBankSearchQuery"
+                                       @focus="showMilkBankDropdown = true; milkBankSearchQuery = ''"
+                                       @blur="handleMilkBankBlur"
+                                       placeholder="Search Milk Bank..."
+                                       class="tms-text-input">
+                
+                                <ul v-if="showMilkBankDropdown" class="tms-dropdown-menu" style="margin: 4px 0 0 0; padding: 0; list-style: none;">
+                                    <li v-for="bank in filteredMilkBanks" :key="bank.id" 
+                                        @click="selectMilkBank(bank)"
+                                        class="tms-dropdown-item">
+                                        {{ bank.name }}
+                                    </li>
+                                    <li v-if="filteredMilkBanks.length === 0" style="padding: 10px; color: #64748b; font-style: italic;">
+                                        No matches found.
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div class="tms-grid-2">
+                                <div class="tms-input-wrapper">
+                                    <label style="font-size: 0.75rem; font-weight: bold; color: #475569; text-transform: uppercase;">Volume (mL)</label>
+                                    <input type="number" v-model="demoSettings.volume" class="tms-text-input">
+                                </div>
+                                <div class="tms-input-wrapper">
+                                    <label style="font-size: 0.75rem; font-weight: bold; color: #475569; text-transform: uppercase;">Calories (Cal/Oz)</label>
+                                    <input type="number" v-model="demoSettings.calories" class="tms-text-input">
+                                </div>
+                            </div>
+
+                            <div class="tms-grid-2">
+                                <div class="tms-input-wrapper">
+                                    <label style="font-size: 0.75rem; font-weight: bold; color: #475569; text-transform: uppercase;">Batch Number</label>
+                                    <input type="text" v-model="demoSettings.batchNumber" placeholder="e.g. 001319-1" class="tms-text-input">
+                                </div>
+                                <div class="tms-input-wrapper">
+                                    <label style="font-size: 0.75rem; font-weight: bold; color: #475569; text-transform: uppercase;">Milk Type</label>
+                                    <select v-model="demoSettings.milkType" class="tms-text-input" style="height: 34px; background-color: white; cursor: pointer;">
+                                        <option value="Term">Term Milk</option>
+                                        <option value="Preterm">Preterm Milk</option>
+                                        <option value="Colostrum">Colostrum</option>
+                                        <option value="Transitional">Transitional</option>
+                                        <option value="EBM">Expressed</option>
+                                        <option value="PDHM">Pasteurized</option>
+                                        <option value="Dairy Free">Dairy Free</option>
+                                        <option value="Standard Pool">Standard</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div class="tms-grid-2">
+                            <div class="tms-input-wrapper">
+                                <label>Expiration Date</label>
+                                <input type="date" v-model="demoSettings.expiryDate" class="tms-text-input">
+                            </div>
+                            <div class="tms-input-wrapper">
+                                <label>Quantity to Generate</label>
+                                <input type="number" v-model="demoSettings.quantity" class="tms-text-input">
+                            </div>
+                        </div>
+
+                        <button @click="generateDemoLabels" class="tms-btn-primary-large" :class="{ 'btn-attention-blink': isGenerateBlinking }">
+                            ✨ Generate {{ demoSettings.quantity }} Label/s
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-show="!isListView && !isDemoMode" ref="editorContainer" id="editor-container"></div>
+
+            <div v-show="isListView && !isDemoMode" id="list-view-container">
+                <div class="list-header-section">
+                    <div class="folder-controls" style="display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                            <button @click="handleSmartRefresh" :disabled="isLoading" id="btn-refresh-folder" style="white-space: nowrap; display: flex; align-items: center; gap: 5px;">
+                                <span v-if="isLoading">⏳...</span>
+                                <span v-else>🔄 Refresh</span>
+                            </button>
+
+                            <button @click="toggleSelectAll" :disabled="isLoading" :title="isAllSelected ? 'Deselect All' : 'Select All'" style="padding: 6px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <input type="checkbox" :checked="isAllSelected" style="pointer-events: none; margin: 0; accent-color: #475569;">
+                                <span style="font-size: 0.85rem; font-weight: bold; color: #475569;">All</span>
+                            </button>
+
+                            <div class="search-wrapper" style="max-width: 300px; width: 100%;">
+                                <input type="text" v-model="searchQuery" @focus="selectedFiles = []" placeholder="Search by filename..." class="search-input" style="width: 100%; box-sizing: border-box;" />
+                                <!-- <input type="text" v-model="searchQuery" placeholder="Search by filename..." class="search-input" style="width: 100%; box-sizing: border-box;" /> -->
+                                <span v-if="searchQuery" @click="searchQuery = ''" class="clear-search">✖</span>
+                            </div>
+                        </div>
+
+                        <div class="path-input-group" style="margin: 0; white-space: nowrap;">
+                            <button v-if="currentViewMode === 'remote'" @click="switchToLocalMode" title="Switch to Local Workspace" style="background: white; border: 1px solid #cbd5e1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 6px; gap: 8px; font-weight: bold; color: #475569; margin-left: 8px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #0ea5e9;">
+                            <polyline points="17 1 21 5 17 9"></polyline>
+                            <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                            <polyline points="7 23 3 19 7 15"></polyline>
+                            <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                            </svg>
+                            Switch to Local
+                            </button>
+                            <span v-if="currentViewMode === 'remote'" style="color: #0ea5e9; font-weight: bold; font-size: 0.95rem;">
+                                🌐 Remote Server
+                            </span>
+                            <span v-else style="display: flex; align-items: center;" title="Change local folder path">
+                                <span class="path-icon" @click="triggerFolderPicker" style="cursor: pointer; margin-left: 0; margin-right: 5px;">📂</span>
+                                <input type="text" v-model="folderPath" @change="fetchFiles" class="folder-path-input" style="width: 180px;" placeholder="Type server path..." />
+                                <input type="file" ref="folderInput" webkitdirectory directory style="display: none;" @change="handleLocalFolder" />
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="file-list-body">
+                    <div v-if="loading" class="empty-state">Loading files from server...</div>
+                    <div v-else-if="fileList.length === 0" class="empty-state">No ZPL/EPL files found in storage.</div>
+                    
+                    <div v-for="file in filteredFiles" :key="file.id" 
+                         :class="['list-row', { selected: isFileSelected(file) }]"
+                         @click="toggleFileSelection(file)">
+                        <input type="checkbox" class="list-checkbox" :checked="isFileSelected(file)" @click.stop="toggleFileSelection(file)">
+                        <span class="list-date">{{ formatDate(file) }}</span>
+                        <span class="list-name">{{ file.name }}</span>
+                        <span v-if="isNew(file)" class="new-badge" style="flex-shrink: 0;">NEW</span>
+                        <button class="btn-edit-file" @click.stop="editFile(file)" title="Open this specific file in the Editor">📝 Edit</button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-show="isListView" class="tms-panel">
+                <div class="tms-panel-row">
+                    <span class="tms-label">Target URL:</span>
+                    <select v-model="selectedTmsUrl" class="tms-select" :class="{ 'pulse-animation': isLoading }">
+                        <option disabled value="">Select a saved build...</option>
+                        <option v-for="url in tmsUrls" :key="url" :value="url">{{ url }}</option>
+                    </select>
+                    <button v-if="selectedTmsUrl" @click="fetchFileList" class="tms-btn-fetch" :disabled="isLoading">
+                        <span v-if="isLoading">⏳ Fetching...</span>
+                        <span v-else>📥 Fetch EPL files</span>
+                    </button>
+                </div>
+                
+                <div class="tms-panel-row">
+                    <input type="text" v-model="newTmsUrl" placeholder="http://tampageneral.local" @keyup.enter="addTmsUrl" class="tms-input">
+                    <button @click="addTmsUrl" class="tms-btn-add">➕ Add</button>
+                    <button v-if="selectedTmsUrl" @click="removeTmsUrl" class="tms-btn-remove">🗑️ Remove</button>
+                    <button @click="showClientDefaultsModal = true" class="tms-btn-add" style="margin-left: auto;">⚙️ Client Defaults</button>
+                </div>
+            </div>
+
+            <div class="toolbar" style="display: flex; flex-direction: column; gap: 8px; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                
+                <template v-if="!isCalibrationMode">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button v-if="isDemoMode" @click="toggleDemoMode" style="background-color: #e0e7ff; border: 1px solid #a5b4fc; color: #4f46e5; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;">⬅️ Close Generator</button>
+                            <button v-if="isCurrentLabelDemo && !isDemoMode" @click="returnToGenerator" style="background-color: #e0e7ff; border: 1px solid #a5b4fc; color: #4f46e5; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;">⬅️ Back to Generator</button>
+
+                            <template v-if="!isDemoMode">
+                                <button v-if="!isCurrentLabelDemo" @click="toggleViewMode" id="btn-toggle-mode" style="background: white; border: 1px solid #cbd5e1; color: #475569; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">
+                                    <span v-if="isListView">📝</span><span v-else>🔀</span> {{ isListView ? 'Editor View' : 'List View' }}
+                                </button>
+                                
+                                <button v-if="!isCurrentLabelDemo" @click="toggleDemoMode" id="btn-toggle-demo" style="background-color: #ccfbf1; border: 1px solid #5eead4; color: #0f766e; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#99f6e4'" onmouseout="this.style.backgroundColor='#ccfbf1'">
+                                    ✨ Generator
+                                </button>
+                                
+                                <button @click="enterCalibrationMode" v-if="isDeveloperMode" title="Open Advanced Adjustments" style="background: white; border: 1px solid #10b981; color: #10b981; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#f0fdf4'" onmouseout="this.style.backgroundColor='white'">
+                                    🎯 Calibrate
+                                </button>
+
+                                <div style="border-left: 1px solid #cbd5e1; height: 18px; margin: 0 2px;"></div>
+
+                                <button @click="rotateLabels" title="Rotate Label" style="background: white; border: 1px solid #cbd5e1; color: #475569; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">⟳ Rotate</button>
+                                
+                                <button @click="clearWorkspace" title="Clear Editor" id="btn-clear" style="background: white; border: 1px solid #fca5a5; color: #ef4444; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#fef2f2'" onmouseout="this.style.backgroundColor='white'">
+                                    🗑️ Clear
+                                </button>
+                                <button v-if="isDeveloperMode" @click="nukeCache" style="background: red; color: white;">🗑️ Clear Cache</button>
+                            </template>
+                        </div>
+
+                        <div v-if="!isDemoMode" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button v-if="!qzConnected" @click="connectQZ" id="btn-qz-connect" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #d8b4fe; background: #f3e8ff; color: #6b21a8; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#e9d5ff'" onmouseout="this.style.backgroundColor='#f3e8ff'">🔌 Connect</button>
+                            
+                            <select v-if="qzConnected" v-model="selectedPrinter" style="padding: 4px 8px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: 600; color: #334155; font-size: 0.85rem; outline: none; background: white; max-width: 180px;">
+                                <option value="" disabled>Select Printer...</option>
+                                <option v-for="printer in qzPrinters" :key="printer" :value="printer">{{ printer }}</option>
+                            </select>
+                            
+                            <button v-if="qzConnected" @click="printLabels" id="btn-print" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: white; font-weight: 600; color: #334155; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background 0.2s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">🖨️ Print</button>
+                        </div>
+                    </div>
+
+                    <div v-if="!isDemoMode" style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.75rem; font-weight: 800; color: #334155; text-transform: uppercase;">Auto Size</span>
+                            <div @click="settings.isAutoDetectActive = !settings.isAutoDetectActive" 
+                                 style="width: 36px; height: 20px; border-radius: 10px; cursor: pointer; position: relative; transition: background-color 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);"
+                                 :style="{ backgroundColor: settings.isAutoDetectActive ? '#10b981' : '#cbd5e1' }">
+                                <div style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.3);"
+                                     :style="{ transform: settings.isAutoDetectActive ? 'translateX(16px)' : 'translateX(0)' }"></div>
+                            </div>
+                        </div>
+
+                        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; margin: 0;">
+                            <input type="checkbox" @change="renderLabelLocally" v-model="settings.isHardwareCenteringActive" style="width: 14px; height: 14px; accent-color: #0ea5e9; cursor: pointer; margin: 0; ">
+                            Programmed Fit
+                        </label>
+
+                        <div style="border-left: 1px solid #cbd5e1; height: 18px;"></div>
+
+                        <select v-model="selectedPrinterProfile" @change="handleProfileChange" style="padding: 2px 6px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; background: white;">
+                            <option value="general">🖨️ Printer profiles</option>
+                            <template v-for="(config, key) in printerConfigs" :key="key">
+                                <option v-if="key !== 'general'" :value="key">{{ config.name || key }}</option>
+                            </template>
+                        </select>
+
+                        <select v-model="settings.density" :disabled="!!activePrinterConfig.fixedDpi" @change="triggerRender" style="padding: 2px 6px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; background: white;">
+                            <option value="8">203 DPI</option>
+                            <option value="12">300 DPI</option>
+                        </select>
+
+                        <select  v-model="settings.size" @change="handleSizeChange" style="padding: 2px 6px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; background: white;">
+    
+                            <optgroup v-for="(sizeList, category) in activePrinterConfig.sizes" :key="category" :label="'— ' + category + ' —'">
+                             <option v-for="size in sizeList" :value="size" :key="size">{{ size }}"</option>
+                            </optgroup>
+
+                            <optgroup label="— Custom —">
+                            <option value="custom">Custom Size...</option>
+                            </optgroup>
+    
+                        </select>
+
+                        <div v-show="settings.size === 'custom'" style="display: flex; align-items: center; gap: 4px;">
+                            <input type="number" v-model.number="settings.customW" @input="triggerRender" step="0.25" style="width: 45px; height: 28px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; outline: none; font-weight: 600;" placeholder="W">
+                            <span style="color: #64748b; font-weight: bold; font-size: 0.85rem;">x</span>
+                            <input type="number" v-model.number="settings.customH" @input="triggerRender" step="0.25" style="width: 45px; height: 28px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; outline: none; font-weight: 600;" placeholder="H">
+                        </div>
+                        <div class="toolbar-group" style="display: flex; align-items: center; gap: 5px;">
+                        <label for="col-select" style="font-weight: bold; font-size: 14px;">Layout:</label>
+                            <select id="col-select" v-model="columnCount" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer;">
+                            <option :value="1">1 Column</option>
+                            <option :value="2">2 Columns</option>
+                            <option :value="3">3 Columns</option>
+                            </select>
+                        </div>
+                        <div style="margin-left: auto; display: flex; align-items: center; background: white; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; height: 26px;">
+                            <button @click="zoomOut" style="padding: 0 8px; height: 100%; border: none; background: transparent; color: #64748b; font-weight: bold; font-size: 0.85rem; cursor: pointer;" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'">➖</button>
+                            <span style="padding: 0 6px; font-size: 0.8rem; font-weight: bold; color: #0f172a; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; min-width: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">{{ mathUtils.round(settings.zoom * 100) }}%</span>
+                            <button @click="zoomIn" style="padding: 0 8px; height: 100%; border: none; background: transparent; color: #64748b; font-weight: bold; font-size: 0.85rem; cursor: pointer;" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'">➕</button>
+                        </div>
+                    </div>
+                </template>
+
+                <template v-if="isCalibrationMode && !isDemoMode">
+                    <div style="display: flex; flex-direction: column; gap: 8px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px dashed #cbd5e1;">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <button @click="isCalibrationMode = false" style="background-color: #e0e7ff; border: 1px solid #a5b4fc; color: #4f46e5; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s;">⬅️ Back</button>
+                                
+                                <div style="border-left: 1px solid #cbd5e1; height: 18px;"></div>
+                                
+                                <button @click="saveCurrentCalibration" title="Save these rules for this label type" style="padding: 5px 10px; font-size: 0.85rem; font-weight: 600; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; cursor: pointer;" onmouseover="this.style.backgroundColor='#bae6fd'" onmouseout="this.style.backgroundColor='#e0f2fe'">💾 Save</button>
+                                <button @click="resetCurrentCalibration" title="Revert to defaults" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #fca5a5; background: #fef2f2; color: #b91c1c; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;" onmouseover="this.style.backgroundColor='#fee2e2'" onmouseout="this.style.backgroundColor='#fef2f2'">🔄 Reset</button>
+
+                                <div style="border-left: 1px solid #cbd5e1; height: 18px;"></div>
+                                
+                                <span style="font-weight: 600; color: #4a5568; font-size: 0.85rem;">Canvas Offset:</span>
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem; font-weight: 600; color: #334155;">X <input type="number" v-model.number="settings.offsetX" step="1" @input="debouncedRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                                <span style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem; font-weight: 600; color: #334155;">Y <input type="number" v-model.number="settings.offsetY" step="1" @input="debouncedRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <button v-if="!qzConnected" @click="connectQZ" id="btn-qz-connect" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #d8b4fe; background: #f3e8ff; color: #6b21a8; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;" onmouseover="this.style.backgroundColor='#e9d5ff'" onmouseout="this.style.backgroundColor='#f3e8ff'">🔌 Connect</button>
+                                <select v-if="qzConnected" v-model="selectedPrinter" style="padding: 4px 8px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: 600; color: #334155; font-size: 0.85rem; outline: none; background: white; max-width: 150px;">
+                                    <option value="" disabled>Printer...</option>
+                                    <option v-for="printer in qzPrinters" :key="printer" :value="printer">{{ printer }}</option>
+                                </select>
+                                <button v-if="qzConnected" @click="printLabels" id="btn-print" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e1; background: white; font-weight: 600; color: #334155; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='white'">🖨️ Print</button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: white; padding: 8px 10px; border-radius: 4px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">    
+                            <span style="font-weight: bold; color: #0f766e; margin-right: 4px; font-size: 0.85rem;">2D Barcode:</span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">Size <input type="number" v-model="settings.dmOffset" step="0.1" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">X <input type="number" v-model="settings.bcMoveX" step="1" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">Y <input type="number" v-model="settings.bcMoveY" step="1" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            
+                            <div style="border-left: 1px solid #cbd5e1; height: 18px; margin: 0 4px;"></div>
+                            
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">
+                                Font <input type="search" v-model="settings.font" list="font-options" @focus="$event.target.select()" @change="triggerRender" style="width: 75px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;" placeholder="Def">
+                                <datalist id="font-options"><option v-for="font in commonLabelFonts" :key="font" :value="font"></option></datalist>
+                            </span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">T-Scale <input type="number" v-model="settings.fontSize" step="0.05" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">W-Scale <input type="number" v-model="settings.fontWidth" step="0.05" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                            <span style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; color: #334155;">Space <input type="number" v-model="settings.fontSpace" step="1" @change="triggerRender" style="width: 45px; height: 26px; box-sizing: border-box; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none;"></span>
+                        </div> 
+
+                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; background: white; padding: 6px 10px; border-radius: 4px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                            
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 0.75rem; font-weight: 800; color: #334155; text-transform: uppercase;">Auto Size</span>
+                                <div @click="settings.isAutoDetectActive = !settings.isAutoDetectActive" 
+                                     style="width: 36px; height: 20px; border-radius: 10px; cursor: pointer; position: relative; transition: background-color 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);"
+                                     :style="{ backgroundColor: settings.isAutoDetectActive ? '#10b981' : '#cbd5e1' }">
+                                    <div style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.3);"
+                                         :style="{ transform: settings.isAutoDetectActive ? 'translateX(16px)' : 'translateX(0)' }"></div>
+                                </div>
+                            </div>
+    
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; margin: 0;">
+                                <input type="checkbox" @change="renderLabelLocally" v-model="settings.isHardwareCenteringActive" style="width: 14px; height: 14px; accent-color: #0ea5e9; cursor: pointer; margin: 0; ">
+                                Programmed Fit
+                            </label>
+
+                            <div style="border-left: 1px solid #cbd5e1; height: 18px; margin: 0 2px;"></div>
+
+                            <select v-model="settings.density" :disabled="!!activePrinterConfig.fixedDpi" @change="triggerRender" style="padding: 2px 6px; height: 26px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; background: white;">
+                                <option value="8">203 DPI</option>
+                                <option value="12">300 DPI</option>
+                            </select>
+    
+                            <select v-model="settings.size" @change="handleSizeChange" style="padding: 2px 6px; height: 26px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #334155; font-weight: 600; cursor: pointer; background: white;">
+                                <optgroup v-for="(sizeList, category) in activePrinterConfig.sizes" :key="category" :label="'— ' + category + ' —'">
+                                 <option v-for="size in sizeList" :value="size" :key="size">{{ size }}"</option>
+                                </optgroup>
+                                <optgroup label="— Custom —">
+                                <option value="custom">Custom Size...</option>
+                                </optgroup>
+                            </select>
+    
+                            <div v-show="settings.size === 'custom'" style="display: flex; align-items: center; gap: 4px;">
+                                <input type="number" v-model.number="settings.customW" @input="triggerRender" step="0.25" style="width: 45px; height: 26px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; outline: none; font-weight: 600;" placeholder="W">
+                                <span style="color: #64748b; font-weight: bold; font-size: 0.85rem;">x</span>
+                                <input type="number" v-model.number="settings.customH" @input="triggerRender" step="0.25" style="width: 45px; height: 26px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; outline: none; font-weight: 600;" placeholder="H">
+                            </div>
+
+                            <div style="margin-left: auto; display: flex; align-items: center; background: white; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; height: 26px;">
+                                <button @click="zoomOut" style="padding: 0 8px; height: 100%; border: none; background: transparent; color: #64748b; font-weight: bold; font-size: 0.85rem; cursor: pointer;" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'">➖</button>
+                                <span style="padding: 0 6px; font-size: 0.8rem; font-weight: bold; color: #0f172a; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; min-width: 40px; text-align: center; display: flex; align-items: center; justify-content: center;">{{ mathUtils.round(settings.zoom * 100) }}%</span>
+                                <button @click="zoomIn" style="padding: 0 8px; height: 100%; border: none; background: transparent; color: #64748b; font-weight: bold; font-size: 0.85rem; cursor: pointer;" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'">➕</button>
+                            </div>
+
+                        </div>
+                    </div>
+                </template>
+
+            </div>
+            </div>
+
+        <div class="right-panel">
+            <div style="width: 100%; text-align: right; font-size: 0.75rem; color: #64748b; font-weight: 600; padding: 0 6px 8px 6px;">
+                Rendered: {{ renderedLabels.length }} label{{ renderedLabels.length === 1 ? '' : 's' }}
+            </div>
+            <div id="label-roll-container" :style="{ display: 'grid', gridTemplateColumns: 'repeat(' + columnCount + ', max-content)', gap: '20px', justifyContent: 'center', alignItems: 'start', padding: '20px' }">
+                
+                <div v-if="renderedLabels.length === 0" class="empty-state" style="grid-column: 1 / -1;">
+                    {{ isListView ? (selectedFiles.length === 0 ? 'No labels checked.' : 'Rendering...') : 'Editor is empty or rendering...' }}
+                </div>
+                
+                <div v-for="(label, index) in renderedLabels" :key="index" 
+                     class="physical-label" 
+                     :class="{ rendering: label.loading, 'has-error': label.error }"
+                     :style="[computedLabelStyle, { margin: '0' }]"> <img v-if="label.src && !label.error" :src="label.src" :alt="label.alt" :style="computedImageStyle">
+                    
+                    <div v-if="label.error" class="render-error-overlay">
+                        <span class="err-icon">⚠️</span>
+                        <span class="err-title">Render Failed</span>
+                        <span class="err-msg">{{ label.errorMsg }}</span>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        
+        <div v-if="showClientDefaultsModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;" v-cloak>
+    <div style="background: white; padding: 25px; border-radius: 8px; width: 700px; max-width: 95%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <h3 style="margin-top: 0; color: #0f766e; border-bottom: 2px solid #ccfbf1; padding-bottom: 10px;">⚙️ Client Default Hardware</h3>
+        <p style="font-size: 0.85rem; color: #64748b;">Save a keyword (like <b>tampageneral</b>). Any URL containing that keyword will automatically snap to these settings.</p>
+
+        <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label class="tms-label" style="display: block; margin-bottom: 5px;">Keyword to Match:</label>
+                    <input type="text" v-model="newClientKeyword" class="tms-input" style="width: 100%; box-sizing: border-box;" placeholder="e.g., ssmhealth">
+                </div>
+                <button @click="saveClientDefault" class="tms-btn-fetch" style="height: 34px;">💾 Save Current UI Settings</button>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.8rem; color: #0369a1; font-weight: bold;">
+                Will save: {{ settings.size === 'custom' ? (settings.customW || 3) + 'x' + (settings.customH || 1.5) : settings.size }} at {{ settings.density === '12' ? '300 DPI' : '203 DPI' }}
+            </div>
+        </div>
+
+        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead style="background: #f1f5f9; text-align: left; border-bottom: 2px solid #cbd5e1; position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th style="padding: 10px;">Client Keyword</th>
+                        <th style="padding: 10px;">Default Size</th>
+                        <th style="padding: 10px;">Default DPI</th>
+                        <th style="padding: 10px;">Printer Hardware</th>
+                        <th style="padding: 10px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(prefs, keyword) in calibrationRules.clientDefaults" :key="keyword" style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 10px; font-weight: bold; color: #334155;">{{ keyword }}</td>
+                        <td style="padding: 10px;">{{ prefs.size === 'custom' ? (prefs.customW || 3) + 'x' + (prefs.customH || 1.5) : prefs.size }}</td>
+                        <td style="padding: 10px;">{{ prefs.density === '12' ? '300' : '203' }}</td>
+                        
+                        <td style="padding: 10px; color: #64748b; font-size: 0.8rem;">
+                            {{ prefs.printer || 'No Record' }}
+                        </td>
+
+                        <td style="padding: 10px; text-align: right;">
+                            <button @click="deleteClientDefault(keyword)" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;">🗑️ Delete</button>
+                        </td>
+                    </tr>
+                    <tr v-if="!calibrationRules.clientDefaults || Object.keys(calibrationRules.clientDefaults).length === 0">
+                        <td colspan="5" style="padding: 20px; text-align: center; color: #94a3b8; font-style: italic;">No client defaults have been saved to the JSON file yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+            <button @click="showClientDefaultsModal = false" class="tms-btn-add">Close Manager</button>
+        </div>
+    </div>
+</div>
+        <div v-if="showBarcodeModal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; display: flex; align-items: center; justify-content: center;" v-cloak>
+            <div style="background: white; padding: 25px; border-radius: 8px; width: 500px; max-width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccfbf1; padding-bottom: 10px; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #0f766e; display: flex; align-items: center; gap: 8px;">📦 Datamatrix Generator</h3>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button @click="saveProductOverrides" style="background: #0d9488; border: 1px solid #0f766e; color: white; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#0f766e'" onmouseout="this.style.backgroundColor='#0d9488'">
+                            💾 Save
+                        </button>
+                        <button @click="addBarcode" style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#d1fae5'; this.style.borderColor='#6ee7b7'" onmouseout="this.style.backgroundColor='#ecfdf5'; this.style.borderColor='#a7f3d0'">
+                            ➕ Add Barcode
+                        </button>
+                    </div>
+                </div>
+
+                <p style="font-size: 0.85rem; color: #64748b; margin-top: -5px; margin-bottom: 15px;">
+                    Instantly generate virtual labels for product demos.
+                </p>
+
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.85rem; font-weight: bold; color: #334155;">Generate Barcode Format:</span>
+                    <select v-model="demoSettings.barcodeFormat" style="min-width: 200px; padding: 6px 10px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; font-size: 0.85rem; color: #0f766e; font-weight: bold; background: white; cursor: pointer;">
+                        <option v-for="fmt in allowedBarcodeFormats" :key="fmt.value" :value="fmt.value">
+                            {{ fmt.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <p style="font-size: 0.85rem; color: #334155; margin-bottom: 15px;">
+                    Choose the specific barcode to encode for <strong style="color: #0f766e;">{{ pendingProductSelection?.name }}</strong>:
+                </p>
+                
+                <div style="display: flex; flex-direction: column; gap: 12px; max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                    
+                    <div v-if="pendingProductSelection?.productId" style="display: flex; align-items: center; gap: 10px; padding-bottom: 5px; border-bottom: 1px dashed #e2e8f0;">
+                        <button @click="chooseBarcode(pendingProductSelection.productId)" title="Encode Product ID" style="background: #dcfce7; border: 1px solid #86efac; color: #166534; border-radius: 4px; padding: 8px 12px; cursor: pointer; font-weight: bold; font-size: 0.8rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background 0.2s;" onmouseover="this.style.backgroundColor='#bbf7d0'" onmouseout="this.style.backgroundColor='#dcfce7'">
+                            Use
+                        </button>
+
+                        <div style="flex: 1; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-weight: bold; color: #64748b; font-size: 0.95rem;">Product ID</span>
+                            <span style="font-family: monospace; color: #475569; font-size: 0.95rem; background: #e2e8f0; padding: 4px 8px; border-radius: 4px; text-align: right;">{{ pendingProductSelection.productId }}</span>
+                        </div>
+
+                        <div style="width: 36px;"></div> </div>
+
+                    <div v-for="(bc, index) in pendingProductSelection?.barcodes" :key="index" style="display: flex; align-items: center; gap: 10px;">
+                        
+                        <button @click="chooseBarcode(bc.value)" title="Encode this barcode" style="background: #dcfce7; border: 1px solid #86efac; color: #166534; border-radius: 4px; padding: 8px 12px; cursor: pointer; font-weight: bold; font-size: 0.8rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background 0.2s;" onmouseover="this.style.backgroundColor='#bbf7d0'" onmouseout="this.style.backgroundColor='#dcfce7'">
+                            Use
+                        </button>
+
+                        <div style="flex: 1; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);">
+                            <input type="text" v-model="bc.type" list="pkg-levels" placeholder="e.g. Carton" style="border: none; background: transparent; font-weight: bold; color: #0f766e; font-size: 0.95rem; width: 40%; outline: none;">
+                            <datalist id="pkg-levels">
+                                <option value="Unit"></option>
+                                <option value="Inner"></option>
+                                <option value="Carton"></option>
+                                <option value="Case"></option>
+                                <option value="Pallet"></option>
+                            </datalist>
+                            <input type="text" v-model="bc.value" placeholder="Barcode Data" style="border: none; font-family: monospace; color: #0369a1; font-size: 0.95rem; background: #e0f2fe; padding: 4px 8px; border-radius: 4px; width: 50%; text-align: right; outline: none;">
+                        </div>
+
+                        <button @click="deleteBarcode(index)" title="Delete Barcode" style="background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#fee2e2'; this.style.borderColor='#fca5a5'; this.style.color='#b91c1c'" onmouseout="this.style.backgroundColor='#fef2f2'; this.style.borderColor='#fecaca'; this.style.color='#ef4444'">
+                            🗑️
+                        </button>
+                    </div>
+
+                    <div v-if="!pendingProductSelection?.barcodes || pendingProductSelection.barcodes.length === 0" style="text-align: center; color: #94a3b8; font-style: italic; padding: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px;">
+                        No barcodes found. Click "➕ Add Barcode" to create one.
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 15px;">
+                    <button @click="showBarcodeModal = false" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#f1f5f9'; this.style.color='#0f172a'" onmouseout="this.style.backgroundColor='#f8fafc'; this.style.color='#475569'">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- 100% Local Processing Scripts (Zero External Dependencies & HIPAA Secure) -->
+    
+    
+
+    <!-- 100% Local Processing Scripts -->
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>

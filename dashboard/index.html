@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMS Tools Suite</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-wrapper">
+        <header class="header">
+            <div class="brand">
+                <img src="../assets/icons/icon48.png" alt="TMS Logo" />
+                <h1>TMS Tools Suite</h1>
+            </div>
+            <div class="security-badge">
+                <span class="status-dot"></span>
+                100% Local Processing (HIPAA Secure)
+            </div>
+        </header>
+
+        <main class="grid-container">
+            <div class="tool-card" data-path="../tools/phi-scrubber/app.html">
+                <div class="card-icon scrubbing-icon">🛡️</div>
+                <h2>PHI Scrubber Pro</h2>
+                <p>Locally analyze and scrub Protected Health Information from HL7 logs and text.</p>
+            </div>
+            <div class="tool-card" data-path="../tools/label-simulator/index.html">
+                <div class="card-icon label-icon">🏷️</div>
+                <h2>Virtual Label Simulator</h2>
+                <p>Generate, simulate, and calibrate ZPL/EPL labels with direct local hardware integration.</p>
+            </div>
+        </main>
+    </div>
+    <script src="dashboard.js"></script>
+</body>
+</html>

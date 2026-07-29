@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "TMS Tools Suite",
+  "version": "2.0",
+  "description": "Unified 100% Local Suite: PHI Scrubber & Label Simulator",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Open TMS Tools Suite"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "http://*.local/*",
+    "https://*.local/*",
+    "https://*.timelessmedical.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "tools/phi-scrubber/worker.min.js",
+        "tools/phi-scrubber/mirth.min.js",
+        "tools/phi-scrubber/tesseract-core.wasm.js",
+        "tools/phi-scrubber/eng.traineddata.gz"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self' blob:; worker-src 'self' blob:;"
+  },
+  "sandbox": {
+    "pages": [
+      "tools/label-simulator/sandbox.html"
+    ]
+  }
+}

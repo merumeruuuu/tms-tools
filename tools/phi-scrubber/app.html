@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PHI Scrubber Dashboard</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="sidebar">
+    <h2>PHI Scrubber</h2>
+    
+    <div class="settings-panel">
+      <h3>Replacement Data</h3>
+      <p class="subtitle">Customize and save your dummy data here.</p>
+      
+      <label>Prefix:</label>
+      <input type="text" id="dummy-prefix" value="Dr.">
+
+      <label>First Name:</label>
+      <input type="text" id="dummy-first" value="John">
+
+      <label>Middle Name/Initial:</label>
+      <input type="text" id="dummy-middle" value="A">
+
+      <label>Last Name:</label>
+      <input type="text" id="dummy-last" value="Doe">
+
+      <label>Nickname:</label>
+      <input type="text" id="dummy-nickname" value="Johnny">
+      
+      <label>SSN/ID/MRN:</label>
+      <input type="text" id="dummy-id" value="[RANDOM]">
+      
+      <label>Mobile/Phone:</label>
+      <input type="text" id="dummy-phone" value="555-0199">
+
+      <label>Email:</label>
+      <input type="text" id="dummy-email" value="test@email.com">
+
+      <label>Address:</label>
+      <input type="text" id="dummy-address" value="123 Fake St, City, ST">
+
+      <label>Date:</label>
+      <input type="text" id="dummy-date" value="01/01/2000">
+      
+      <button id="btn-save-settings" class="secondary-btn">Save Preferences</button>
+      <div id="save-status"></div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    
+    <div class="tabs">
+      <button id="tab-text" class="active">IDE Text / Paste Image</button>
+      <!-- <button id="tab-file"></button> -->
+      <button id="tab-inspector">HL7 Tree Inspector</button>
+    </div>
+
+    <div id="view-text" class="view active">
+      <div class="toolbar">
+        <button id="btn-scrub-text" class="primary-btn">Scrub PHI and replace</button>
+        <button id="btn-scan-text" class="secondary-btn" style="margin-top: 0; width: auto;">Scan PHI contents</button>
+        <button id="btn-copy">Copy Cleaned Text</button>
+        <button id="btn-clear">Clear Editors</button>
+      </div>
+      <div id="text-status" class="status-msg"></div>
+      
+      <div class="ide-container">
+        <div class="ide-pane">
+          <div class="ide-header">RAW INPUT (RED)</div>
+          <div id="raw-editor" class="code-editor" contenteditable="true" spellcheck="false" placeholder="Paste text, logs, or image here..."></div>
+        </div>
+        <div class="ide-center-gutter">
+          <div class="ide-header text-transparent">.</div>
+          <div id="action-editor" class="code-editor gutter-editor"></div>
+        </div>
+        <div class="ide-pane">
+          <div class="ide-header">CLEAN OUTPUT (GREEN)</div>
+          <div id="clean-editor" class="code-editor" contenteditable="true" spellcheck="false" placeholder="Scrubbed output will generate here..."></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- <div id="view-file" class="view hidden">
+      <div class="file-container">
+        <h3>Bulk File & Image Scrubbing</h3>
+        <p>Select a .txt, .csv, .json, or an Image (.png, .jpg) to process.</p>
+        <input type="file" id="file-upload" accept=".txt,.csv,.json,.png,.jpg,.jpeg">
+        <div class="toolbar" style="justify-content: center; margin-top: 15px;">
+          <button id="btn-scrub-file" class="primary-btn" style="width: auto;">Process & Scrub File</button>
+          <button id="btn-scan-file" class="secondary-btn" style="margin-top: 0; width: auto;">Scan & Verify File</button>
+        </div>
+        <div id="file-status" class="status-msg" style="margin-top: 15px;"></div>
+      </div>
+    </div> -->
+
+    <div id="view-inspector" class="view hidden">
+      <div class="toolbar">
+        <button id="btn-build-tree" class="primary-btn">Generate Tree from IDE Text</button>
+      </div>
+      <div class="status-msg" style="color: #6b7280; background: transparent; border: none; padding-left: 0;">Analyzes the raw text currently sitting in your IDE tab.</div>
+      
+      <div id="tree-container" class="hl7-tree-container">
+        <p class="subtitle" style="text-align:center; margin-top:40px;">Paste HL7 in the 'IDE Text' tab, then click Generate to inspect.</p>
+      </div>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
