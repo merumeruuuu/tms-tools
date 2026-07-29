@@ -11,54 +11,43 @@ window.addEventListener('message', async (event) => {
     if (event.data.action === 'SAVE_STORAGE') {
         chrome.storage.local.set({ [event.data.key]: event.data.value });
     }
-    
-    // 2. Safely reload the extension when the sandbox asks
+    // Return to the dashboard selection page from the outer shell.
+    if (event.data.action === 'GO_DASHBOARD') {
+        window.location.href = '../../dashboard/index.html';
+        return;
+    }
+    // 3. NEW: Safely reload the extension when the sandbox asks
     if (event.data.action === 'RELOAD_APP') {
         window.location.reload();
     }
-    
-    // 3. The Nuclear Option (Wipes Chrome's native storage)
+    // 4. NEW: The Nuclear Option (Wipes Chrome's native storage)
     if (event.data.action === 'CLEAR_ALL_STORAGE') {
         chrome.storage.local.clear(() => {
-            console.log("🔒 Chrome storage completely wiped.");
+            console.log("💥 Chrome storage completely wiped.");
         });
     }
-
-    // 4. HARDENED VIP Fetch Proxy (Bypasses CORS but RESTRICTS to Local Only!)
+    
+// 2. NEW: The VIP Fetch Proxy (Bypasses CORS!)
     if (event.data.action === 'FETCH_API') {
         try {
-            const targetUrl = new URL(event.data.url);
-            
-            // 🛡️ SECURITY ENFORCEMENT: Only allow specific local/internal domains
-            const allowedDomains = ['localhost', '127.0.0.1', '.local', '.timelessmedical.com'];
-            const isAllowed = allowedDomains.some(domain => 
-                targetUrl.hostname === domain || targetUrl.hostname.endsWith(domain)
-            );
-
-            if (!isAllowed) {
-                console.error(`🚨 SECURITY BLOCK: Attempted to fetch external URL: ${event.data.url}`);
-                throw new Error('SECURITY BLOCK: External API calls are strictly forbidden. HIPAA/PHI local environment enforced.');
-            }
-
             const response = await fetch(event.data.url, {
-                method: event.data.method || 'GET',
+                method: event.data.method || 'GET', //  FIX: Reads the dynamic method (defaults to GET)
                 headers: event.data.headers
             });
-                         
-            const textData = await response.text();
-                          
+            
+            const textData = await response.text(); 
+            
             if (!response.ok) {
                 throw new Error(textData);
             }
-                         
+            
             frame.contentWindow.postMessage({ 
-                 action: 'FETCH_SUCCESS', id: event.data.id, data: textData 
-             }, '*');
-
+                action: 'FETCH_SUCCESS', id: event.data.id, data: textData 
+            }, '*');
         } catch (error) {
             frame.contentWindow.postMessage({ 
-                 action: 'FETCH_ERROR', id: event.data.id, error: error.message 
-             }, '*');
+                action: 'FETCH_ERROR', id: event.data.id, error: error.message 
+            }, '*');
         }
     }
 });

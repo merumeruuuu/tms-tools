@@ -1,5 +1,5 @@
 import { createApp, ref, onMounted, onUnmounted, computed, watch } from '../libs/vue.esm-browser.prod.js';
-import { ready } from '../libs/zpl-renderer.min.js";
+import { ready } from "../libs/zpl-renderer.min.js";
 
 import { TimelessEncryption } from './label-core/encryption.js';
 import { printerConfigs, milkBanks, BASE_FACTORY_SIGNATURES, DEMO_PRODUCT_SIGNATURES, sizeOffsets, commonLabelFonts } from './label-core/configs.js';

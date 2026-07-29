@@ -27,6 +27,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Robo
 
 /* --- SIDEBAR REVAMP --- */
 .sidebar { width: 280px; min-width: 280px; background: var(--bg-card); border-right: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; overflow-y: auto; box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02); }
+.back-button { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); text-decoration: none; font-size: 12px; font-weight: 700; transition: all 0.15s ease-in-out; }
+.back-button:hover { background: #e2e8f0; border-color: #cbd5e1; }
 .sidebar h2 { font-size: 20px; font-weight: 800; margin: 0; color: var(--primary); letter-spacing: -0.025em; }
 
 /* --- BEAUTIFIED SETTINGS PANEL --- */

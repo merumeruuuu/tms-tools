@@ -20,6 +20,7 @@
 
 <div id="tms-label-app" class="tms-wrapper" v-cloak>
     <div class="navbar">
+        <button class="back-to-dashboard" type="button" onclick="window.parent.postMessage({ action: 'GO_DASHBOARD' }, '*')">← Back to Dashboard</button>
         <img src="../../assets/icons/icon48.png" alt="TMS Logo" class="brand-logo" style="mix-blend-mode: multiply;" />
         <!-- <h1>TMS Virtual Label Simulator & Barcode Generator</h1> -->
         <h1 id="secret-trigger" class="text-xl font-bold cursor-pointer">TMS Virtual Label Simulator</h1>
@@ -636,11 +637,5 @@
     </div>
 </div>
 
-    <!-- 100% Local Processing Scripts (Zero External Dependencies & HIPAA Secure) -->
-    
-    
-
-    <!-- 100% Local Processing Scripts -->
-    <script type="module" src="./js/app.js"></script>
 </body>
 </html>
