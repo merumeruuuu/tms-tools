@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Studio</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="back-link" href="../../dashboard/index.html">← Back to Dashboard</a>
+      <div class="brand-block">
+        <img class="tms-logo" src="../../assets/icons/icon48.png" alt="TMS Logo">
+        <div>
+          <h1>JSON Studio</h1>
+          <p>Format, compare, and merge JSON with structural awareness.</p>
+        </div>
+      </div>
+
+      <div class="card controls">
+        <div class="control-row">
+          <label for="formatMode">Format mode</label>
+          <select id="formatMode">
+            <option value="beautify">Beautify</option>
+            <option value="minify">Minify</option>
+            <option value="sort">Beautify + sort keys</option>
+            <option value="compact-arrays">Beautify + compact arrays</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label for="indentSize">Indent</label>
+          <select id="indentSize">
+            <option value="2">2 spaces</option>
+            <option value="4">4 spaces</option>
+            <option value="tab">Tabs</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input id="keepFormatting" type="checkbox" checked><span>Keep source formatting on merge</span></label>
+          <label class="toggle"><input id="ignoreArrayOrder" type="checkbox" checked><span>Ignore array order in compare</span></label>
+        </div>
+      </div>
+
+      <div class="card actions">
+        <div class="action-group">
+          <button id="undoBtn">Undo</button>
+          <button id="redoBtn">Redo</button>
+          <button id="revertBtn" class="danger">Revert pane</button>
+        </div>
+        <button id="beautifyBtn" class="primary">Beautify left</button>
+        <button id="minifyBtn">Minify left</button>
+        <button id="copyBtn">Copy output</button>
+        <button id="swapBtn">Swap left/right</button>
+        <button id="mergeLeftBtn" class="accent">Merge right into left</button>
+        <button id="mergeRightBtn" class="accent">Merge left into right</button>
+      </div>
+
+      <div class="card legend">
+        <div><span class="dot add"></span> Added</div>
+        <div><span class="dot remove"></span> Removed</div>
+        <div><span class="dot change"></span> Changed</div>
+        <div><span class="dot equal"></span> Equal</div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section class="pane editor-pane">
+        <header>
+          <div>
+            <h2>Source JSON</h2>
+            <p>Paste minified or formatted JSON here.</p>
+          </div>
+          <span id="leftStatus" class="status">Ready</span>
+        </header>
+        <textarea id="leftInput" spellcheck="false" placeholder='{"example": true, "items": [1,2,3]}'></textarea>
+      </section>
+
+      <section class="pane editor-pane">
+        <header>
+          <div>
+            <h2>Compare / Merge Target</h2>
+            <p>Use this pane for side-by-side structural comparison.</p>
+          </div>
+          <span id="rightStatus" class="status">Ready</span>
+        </header>
+        <textarea id="rightInput" spellcheck="false" placeholder='{"example": false, "items": [3,2,1]}'></textarea>
+      </section>
+
+      <section class="pane output-pane">
+        <header>
+          <div>
+            <h2>Result</h2>
+            <p>Formatted JSON or merged output appears here.</p>
+          </div>
+          <span id="resultStatus" class="status">Idle</span>
+        </header>
+        <pre id="resultOutput" class="output"></pre>
+      </section>
+    </main>
+
+    <section class="compare-panel">
+      <div class="compare-header">
+        <div>
+          <h2>Structural Diff</h2>
+          <p>Array content is matched by value when possible, not just by line position.</p>
+        </div>
+        <div class="compare-meta">
+          <div class="diff-filter-group" role="tablist" aria-label="Diff filters">
+            <button class="diff-filter active" data-filter="all" type="button">All</button>
+            <button class="diff-filter" data-filter="add" type="button">Added</button>
+            <button class="diff-filter" data-filter="change" type="button">Changed</button>
+            <button class="diff-filter" data-filter="remove" type="button">Removed</button>
+            <button class="diff-filter" data-filter="equal" type="button">Equal</button>
+          </div>
+          <span id="diffSummary" class="summary">No comparison yet</span>
+        </div>
+      </div>
+      <div id="diffView" class="diff-view"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

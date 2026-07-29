@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Generator</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="brand-group">
+        <img class="brand-logo" src="../../assets/icons/icon48.png" alt="TMS Logo">
+        <div>
+          <p class="eyebrow">Standalone Module</p>
+          <h1>Barcode Generator</h1>
+          <p class="subtitle">Generate product and milk bank labels without opening the full simulator.</p>
+        </div>
+      </div>
+      <a class="back-link" href="../../dashboard/index.html">← Back to Dashboard</a>
+    </header>
+
+    <main class="content-grid">
+      <section class="panel controls-panel">
+        <div class="module-card">
+          <div class="mode-switch" role="tablist" aria-label="Generator mode">
+            <button class="mode-pill active" data-mode="product" type="button">📦 Product Label</button>
+            <button class="mode-pill" data-mode="milkbank" type="button">🍼 Milk Bank Label</button>
+          </div>
+
+          <div id="selectedSummary" class="selected-summary">Ready to generate labels.</div>
+
+          <div id="gtinLock" class="gtin-lock hidden">
+            <span class="gtin-icon">🔒</span>
+            <div class="gtin-copy">
+              <span class="gtin-label">Target GTIN</span>
+              <span id="gtinValue" class="gtin-value"></span>
+            </div>
+          </div>
+
+          <div id="productFields" class="field-stack">
+            <label class="field-label">Search Product Database</label>
+            <div class="search-wrap">
+              <input id="productSearch" class="text-input" type="text" placeholder="Search product name, category, or ID..." autocomplete="off">
+              <div id="productDropdown" class="dropdown"></div>
+            </div>
+
+            <div class="field-grid two-up">
+              <label class="field-label">Barcode Format
+                <select id="barcodeFormat" class="text-input"></select>
+              </label>
+              <label class="field-label">Start Serial #
+                <input id="startSerial" class="text-input" type="number" min="1" value="1">
+              </label>
+            </div>
+
+            <div class="field-grid two-up">
+              <label class="field-label">Lot Number
+                <input id="lotNumber" class="text-input" type="text" value="DEMO01">
+              </label>
+              <label class="field-label">Expiration Date
+                <input id="expiryDate" class="text-input" type="date">
+              </label>
+            </div>
+          </div>
+
+          <div id="milkbankFields" class="field-stack hidden">
+            <label class="field-label">Target Milk Bank</label>
+            <div class="search-wrap">
+              <input id="milkBankSearch" class="text-input" type="text" placeholder="Search milk bank..." autocomplete="off">
+              <div id="milkBankDropdown" class="dropdown"></div>
+            </div>
+
+            <div class="field-grid two-up">
+              <label class="field-label">Volume (mL)
+                <input id="volume" class="text-input" type="number" min="1" value="120">
+              </label>
+              <label class="field-label">Calories (Cal/Oz)
+                <input id="calories" class="text-input" type="number" min="1" value="20">
+              </label>
+            </div>
+
+            <div class="field-grid two-up">
+              <label class="field-label">Batch Number
+                <input id="batchNumber" class="text-input" type="text" value="001319-1">
+              </label>
+              <label class="field-label">Milk Type
+                <select id="milkType" class="text-input">
+                  <option value="Term">Term Milk</option>
+                  <option value="Preterm">Preterm Milk</option>
+                  <option value="Colostrum">Colostrum</option>
+                  <option value="Transitional">Transitional</option>
+                  <option value="EBM">Expressed</option>
+                  <option value="PDHM">Pasteurized</option>
+                  <option value="Dairy Free">Dairy Free</option>
+                  <option value="Standard Pool">Standard</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="field-grid two-up">
+            <label class="field-label">Quantity to Generate
+              <input id="quantity" class="text-input" type="number" min="1" value="5">
+            </label>
+            <label class="field-label">Generated Type
+              <input id="generatedType" class="text-input" type="text" readonly value="Product">
+            </label>
+          </div>
+
+          <button id="generateBtn" class="generate-btn" type="button">✨ Generate 1 Label/s</button>
+        </div>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="output-header">
+          <div>
+            <p class="eyebrow">Output</p>
+            <h2>Generated ZPL</h2>
+          </div>
+          <div class="output-actions">
+            <button id="copyBtn" type="button">Copy</button>
+            <button id="downloadBtn" type="button">Download</button>
+            <button id="clearBtn" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="output-meta">
+          <span id="outputStatus">Idle</span>
+          <span id="outputCount">0 labels</span>
+        </div>
+
+        <textarea id="outputArea" spellcheck="false" placeholder="Generated label code will appear here..."></textarea>
+        <div id="previewList" class="preview-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
