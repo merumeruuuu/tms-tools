@@ -65,58 +65,88 @@
     </aside>
 
     <main class="workspace">
-      <section class="pane editor-pane">
+      <section class="pane editor-pane" id="leftPane">
         <header>
           <div>
             <h2>Source JSON</h2>
             <p>Paste minified or formatted JSON here.</p>
           </div>
-          <span id="leftStatus" class="status">Ready</span>
+          <div class="pane-header-actions">
+            <span id="leftStatus" class="status">Ready</span>
+            <button class="expand-btn" data-expand-target="leftPane" type="button" aria-expanded="false">Expand</button>
+          </div>
         </header>
         <textarea id="leftInput" spellcheck="false" placeholder='{"example": true, "items": [1,2,3]}'></textarea>
       </section>
 
-      <section class="pane editor-pane">
+      <section class="pane editor-pane" id="rightPane">
         <header>
           <div>
             <h2>Compare / Merge Target</h2>
             <p>Use this pane for side-by-side structural comparison.</p>
           </div>
-          <span id="rightStatus" class="status">Ready</span>
+          <div class="pane-header-actions">
+            <span id="rightStatus" class="status">Ready</span>
+            <button class="expand-btn" data-expand-target="rightPane" type="button" aria-expanded="false">Expand</button>
+          </div>
         </header>
         <textarea id="rightInput" spellcheck="false" placeholder='{"example": false, "items": [3,2,1]}'></textarea>
       </section>
 
-      <section class="pane output-pane">
+      <section class="pane output-pane" id="resultPane">
         <header>
           <div>
             <h2>Result</h2>
             <p>Formatted JSON or merged output appears here.</p>
           </div>
-          <span id="resultStatus" class="status">Idle</span>
+          <div class="pane-header-actions">
+            <span id="resultStatus" class="status">Idle</span>
+            <button class="expand-btn" data-expand-target="resultPane" type="button" aria-expanded="false">Expand</button>
+          </div>
         </header>
         <pre id="resultOutput" class="output"></pre>
       </section>
     </main>
 
-    <section class="compare-panel">
+    <section class="compare-panel" id="comparePane">
       <div class="compare-header">
         <div>
           <h2>Structural Diff</h2>
           <p>Array content is matched by value when possible, not just by line position.</p>
         </div>
         <div class="compare-meta">
-          <div class="diff-filter-group" role="tablist" aria-label="Diff filters">
-            <button class="diff-filter active" data-filter="all" type="button">All</button>
-            <button class="diff-filter" data-filter="add" type="button">Added</button>
-            <button class="diff-filter" data-filter="change" type="button">Changed</button>
-            <button class="diff-filter" data-filter="remove" type="button">Removed</button>
-            <button class="diff-filter" data-filter="equal" type="button">Equal</button>
+          <div class="diff-merge-controls" aria-label="Merge diff data options">
+            <div class="checkbox-group">
+              <label><input class="diff-merge-type" type="checkbox" value="add" checked> Added</label>
+              <label><input class="diff-merge-type" type="checkbox" value="change" checked> Changed</label>
+              <label><input class="diff-merge-type" type="checkbox" value="remove" checked> Removed</label>
+              <label><input class="diff-merge-type" type="checkbox" value="equal"> Equal</label>
+            </div>
+            <div class="button-group">
+              <button id="mergeSelectedLeftBtn" type="button" class="primary">← Merge to Left</button>
+              <button id="mergeSelectedRightBtn" type="button" class="primary">Merge to Right →</button>
+              <button id="previewConsolidatedBtn" type="button">Preview Array</button>
+              <button class="expand-btn" data-expand-target="comparePane" type="button" aria-expanded="false">Expand</button>
+            </div>
           </div>
+          <span id="structuralStatus" class="summary">Ready</span>
           <span id="diffSummary" class="summary">No comparison yet</span>
         </div>
       </div>
       <div id="diffView" class="diff-view"></div>
+      <div class="merge-preview-wrap">
+        <header>
+          <h3>Merged Selected Data</h3>
+        </header>
+        <pre id="mergedSelectedOutput" class="merged-output">No merged data yet.</pre>
+      </div>
+      <div class="merge-preview-wrap">
+        <header>
+          <h3>Consolidated Array Preview</h3>
+          <button id="copyCopyBtn" type="button" class="copy-btn">Copy</button>
+        </header>
+        <pre id="consolidatedArrayOutput" class="merged-output">No consolidated preview yet.</pre>
+      </div>
     </section>
   </div>
 
