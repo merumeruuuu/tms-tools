@@ -367,6 +367,23 @@ textarea {
 .token-boolean { color: #b91c1c; }
 .token-null { color: #475569; }
 
+.type-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.type-string { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.type-number { background: #ede9fe; color: #6d28d9; border: 1px solid #d8b4fe; }
+.type-boolean { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+.type-array { background: #cffafe; color: #164e63; border: 1px solid #06b6d4; }
+.type-object { background: #f3e8ff; color: #5b21b6; border: 1px solid #e9d5ff; }
+.type-null { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+
 .merge-preview-wrap {
   border-top: 1px solid var(--line);
   display: flex;

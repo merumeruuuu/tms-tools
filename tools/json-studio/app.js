@@ -32,8 +32,8 @@ const mergeLeftBtn = document.getElementById('mergeLeftBtn')
 const mergeRightBtn = document.getElementById('mergeRightBtn')
 
 // ============ INITIAL DATA ============
-const initialLeftValue = '{"name":"TMS","items":[{"id":2,"value":"beta"},{"id":1,"value":"alpha"}],"meta":{"enabled":true,"tags":["b","a"]}}'
-const initialRightValue = '{"name":"TMS","items":[{"id":1,"value":"alpha"},{"id":2,"value":"beta-updated"}],"meta":{"enabled":false,"tags":["a","b"]}}'
+const initialLeftValue = '{"name":"TMS","items":[{"id":2,"value":"beta","count":42},{"id":1,"value":"alpha","count":10}],"meta":{"enabled":true,"tags":["b","a"],"version":"1.0","build":1}}'
+const initialRightValue = '{"name":"TMS","items":[{"id":"1","value":"alpha","count":"42"},{"id":"2","value":"beta-updated","count":10}],"meta":{"enabled":false,"tags":["a","b"],"version":1,"build":"1"}}'
 
 leftInput.value = initialLeftValue
 rightInput.value = initialRightValue
@@ -279,6 +279,17 @@ function syntaxHighlight(value) {
     .replace(/\b(-?\d+(?:\.\d+)?)\b/g, '<span class="token-number">$1</span>')
     .replace(/\b(true|false)\b/g, '<span class="token-boolean">$1</span>')
     .replace(/\bnull\b/g, '<span class="token-null">null</span>')
+}
+
+function getTypeBadge(value) {
+  if (value === undefined) return ''
+  if (value === null) return '<span class="type-badge type-null">null</span>'
+  if (typeof value === 'string') return '<span class="type-badge type-string">string</span>'
+  if (typeof value === 'number') return '<span class="type-badge type-number">number</span>'
+  if (typeof value === 'boolean') return '<span class="type-badge type-boolean">boolean</span>'
+  if (Array.isArray(value)) return '<span class="type-badge type-array">array</span>'
+  if (typeof value === 'object') return '<span class="type-badge type-object">object</span>'
+  return ''
 }
 
 function updateOutput(text) {
@@ -535,11 +546,11 @@ function renderDiff(options = {}) {
           return `
         <div class="diff-row">
           <div class="diff-cell ${leftClass}">
-            <header><span class="diff-path">${escapeHtml(diff.path)}</span><span>Left</span></header>
+            <header><span class="diff-path">${escapeHtml(diff.path)}</span><span>Left</span>${getTypeBadge(diff.left)}</header>
             <div class="diff-value ${diff.type === 'add' ? 'token-add' : diff.type === 'remove' ? 'token-remove' : diff.type === 'change' ? 'token-change' : ''}">${diff.left === undefined ? '<em>missing</em>' : syntaxHighlight(diff.left)}</div>
           </div>
           <div class="diff-cell ${rightClass}">
-            <header><span class="diff-path">${escapeHtml(diff.path)}</span><span>Right</span></header>
+            <header><span class="diff-path">${escapeHtml(diff.path)}</span><span>Right</span>${getTypeBadge(diff.right)}</header>
             <div class="diff-value ${diff.type === 'add' ? 'token-add' : diff.type === 'remove' ? 'token-remove' : diff.type === 'change' ? 'token-change' : ''}">${diff.right === undefined ? '<em>missing</em>' : syntaxHighlight(diff.right)}</div>
           </div>
         </div>
