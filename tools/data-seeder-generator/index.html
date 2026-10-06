@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Seeder Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="seeder-wrapper">
+        <header class="header">
+            <div class="icon">📋</div>
+            <h1>Data Seeder Generator</h1>
+            <p class="subtitle">TMS Product Update Utility</p>
+        </header>
+
+        <div class="container">
+            <div class="steps-indicator">
+                <div class="step active" data-step="1"><div class="step-number">1</div><div class="step-label">Target Build</div></div>
+                <div class="step" data-step="2"><div class="step-number">2</div><div class="step-label">Add Products</div></div>
+                <div class="step" data-step="3"><div class="step-number">3</div><div class="step-label">Export Seeder</div></div>
+            </div>
+
+            <!-- Step 1: Detect Build -->
+            <section class="step-content active" id="step-1">
+                <div class="panel-layout">
+                    
+                    <!-- Left Panel: Controls -->
+                    <div class="panel">
+                        <div class="panel-header">Connection Settings</div>
+                        <div class="panel-body">
+                            <div class="product-form-group">
+                                <label>Saved Builds</label>
+                                <div class="input-group" style="margin-bottom:0;">
+                                    <select id="savedBuildsSelect" class="input-field">
+                                        <option value="">Select a saved build...</option>
+                                    </select>
+                                    <button id="forgetBuildBtn" class="btn btn-secondary btn-small" title="Remove" style="display:none;">🗑</button>
+                                </div>
+                            </div>
+                            
+                            <div class="product-form-group" style="margin-top: 20px;">
+                                <label>Local URL Target *</label>
+                                <div class="input-group">
+                                    <input type="text" id="localUrl" placeholder="http://clientname-v7-x-x.local/" class="input-field">
+                                    <button id="detectBuildBtn" class="btn btn-primary">Detect</button>
+                                </div>
+                                <div id="urlError" class="error-message" style="display:none; color: #ef4444; font-size: 12px; margin-top:5px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Info -->
+                    <div class="panel" id="buildDetailsCard" style="display:none;">
+                        <div class="panel-header">Build Details</div>
+                        <div class="panel-body">
+                            <div class="info-row"><label>Client Name:</label><span id="clientName" class="value"></span></div>
+                            <div class="info-row"><label>Version:</label><span id="buildVersion" class="value"></span></div>
+                            <div class="info-row"><label>Quarter:</label><span id="buildQuarter" class="value"></span></div>
+                            <div class="info-row"><label>Local Path:</label><span id="buildPath" class="value monospace"></span></div>
+                            <div class="info-row" style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                <label>Next Seeder #:</label>
+                                <div class="seeder-num-control">
+                                    <span class="data-prefix">DATA</span>
+                                    <input type="number" id="nextSeederNum" class="num-input" placeholder="154" min="1">
+                                    <span id="seederNumSource" class="source-badge estimated">pending</span>
+                                </div>
+                            </div>
+                            <div class="folder-link-row">
+                                <span id="folderLinkStatus" class="folder-link-status">Waiting to verify folder...</span>
+                                <button id="linkFolderBtn" class="btn btn-secondary btn-small" style="display:none;">🔗 Link WAMP Folder</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="navigation-buttons">
+                    <button id="continueBtn" class="btn btn-primary" style="margin-left: auto;">Next: Add Products →</button>
+                </div>
+            </section>
+
+            <!-- Step 2: Form & Table -->
+            <section class="step-content" id="step-2">
+                <div class="panel-layout">
+                    
+                    <!-- Left Panel: Form -->
+                    <div class="panel">
+                        <div class="panel-header">Product Editor</div>
+                        <div class="panel-body">
+                            <div class="form-tabs">
+                                <button class="form-tab-btn active" data-tab="manual">Manual Entry</button>
+                                <button class="form-tab-btn" data-tab="doc">Doc Import</button>
+                                <button class="form-tab-btn" data-tab="csv">CSV Import</button>
+                            </div>
+
+                            <div class="form-tab-content active" id="manual-tab">
+                                <div class="product-form-group">
+                                    <label>Action Type *</label>
+                                    <select id="actionType" class="input-field">
+                                        <option value="">Select an action...</option>
+                                        <option value="create">Add New Product</option>
+                                        <option value="update">Update Product</option>
+                                        <option value="barcode-update">Fix Barcode</option>
+                                    </select>
+                                </div>
+                                <div id="productFormFields"></div>
+                                <button id="addProductBtn" class="btn btn-secondary" style="width:100%; margin-top:15px;">➕ Add to Batch</button>
+                            </div>
+
+                            <!-- Doc Import Tab -->
+                            <div class="form-tab-content" id="doc-tab">
+                                <label for="docFile" class="csv-upload-area">
+                                    <div class="upload-icon">📄</div>
+                                    <h4 style="margin-bottom:8px; color: #1e3a8a;">Upload Word Document</h4>
+                                    <span style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Supports .docx Request Forms</span>
+                                    <span class="btn btn-primary btn-small">Browse Files</span>
+                                </label>
+                                <input type="file" id="docFile" accept=".docx,.txt" style="display:none;">
+                                <!-- Add 'multiple' to the input -->
+                                <input type="file" id="docFile" accept=".docx,.txt" multiple style="display:none;">
+                                <div id="docParseError" class="error-message" style="display:none; margin-top: 10px; color: #ef4444; font-size: 12px;"></div>
+                            </div>
+
+                            <!-- CSV Tab -->
+                            <div class="form-tab-content" id="csv-tab">
+                                <label for="csvFile" class="csv-upload-area">
+                                    <div class="upload-icon">📊</div>
+                                    <h4 style="margin-bottom:8px; color: #1e3a8a;">Upload Bulk CSV</h4>
+                                    <span style="font-size: 12px; color: #64748b; margin-bottom: 15px;">Format: action, productName...</span>
+                                    <span class="btn btn-primary btn-small">Browse Files</span>
+                                </label>
+                                <input type="file" id="csvFile" accept=".csv" style="display:none;">
+                                <button id="downloadCsvTemplate" class="btn btn-secondary" style="width: 100%;">Download CSV Template</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Preview Table -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>Pending Batch <span class="product-count" style="background:#2563eb;color:white;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px;">0</span></div>
+                            <button id="clearAllBtn" class="btn btn-secondary btn-small" style="display:none;">Clear All</button>
+                        </div>
+                        <div class="panel-body" style="padding:0;">
+                            <table class="products-preview-table">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th>Details</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody id="productsTableBody">
+        <tr class="empty-state">
+            <td colspan="4" style="text-align:center; padding:40px; color:#94a3b8;">No products in batch.</td>
+        </tr>
+    </tbody>
+</table>
+                        </div>
+                    </div>
+                </div>
+                <div class="navigation-buttons">
+                    <button id="step2BackBtn" class="btn btn-secondary">← Back</button>
+                    <button id="generateSeederBtn" class="btn btn-primary" style="display:none;">Generate Seeder →</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Output -->
+            <section class="step-content" id="step-3">
+                <div class="panel-layout output-layout">
+                    
+                    <!-- Left Panel: Code Preview -->
+                    <div class="panel">
+                        <div class="panel-header">Generated Seeder</div>
+                        <div class="panel-body" style="padding:0;">
+                            <div class="code-block"><pre><code id="seederPreview"></code></pre></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Output Actions -->
+                    <div class="panel">
+                        <div class="panel-header">Output Options</div>
+                        <div class="panel-body">
+                            <div class="output-option" id="autoWriteWrapper" style="display:none;">
+                                <input type="radio" name="output" id="outputAutoWrite" value="auto-write">
+                                <label for="outputAutoWrite"><strong>💾 Auto-Write</strong><span>Write directly to folder</span></label>
+                            </div>
+                            <div class="output-option">
+                                <input type="radio" name="output" id="outputDownload" value="download" checked>
+                                <label for="outputDownload"><strong>⬇️ Download</strong><span>Save as PHP file</span></label>
+                            </div>
+                            <div class="output-option">
+                                <input type="radio" name="output" id="outputCopy" value="copy">
+                                <label for="outputCopy"><strong>📋 Copy Code</strong><span>Copy to clipboard</span></label>
+                            </div>
+                            <button id="executeOutputBtn" class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px; font-size:15px;">Execute Action</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="navigation-buttons">
+                    <button id="backToProductsBtn" class="btn btn-secondary">← Back to Editor</button>
+                    <button id="newSeederBtn" class="btn btn-secondary">Create Another</button>
+                </div>
+            </section>
+
+            <!-- Toast Messages -->
+            <div id="statusMessage" class="status-message hidden"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="successModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="successTitle">Success!</h3>
+            <p id="successMessage"></p>
+            <button id="closeSuccessBtn" class="btn btn-primary">Done</button>
+        </div>
+    </div>
+
+    <div id="errorModal" class="modal hidden">
+        <div class="modal-content error">
+            <div class="modal-icon">❌</div>
+            <h3>Error</h3>
+            <p id="errorMessage"></p>
+            <button id="closeErrorBtn" class="btn btn-primary">Close</button>
+        </div>
+    </div>
+    <!-- Product Preview Modal -->
+    <div id="previewModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; text-align: left;">
+            <h3 id="previewTitle" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; color: #1e3a8a;">Product Preview</h3>
+            <div id="previewDetails" style="font-size: 13px; color: #0f172a; max-height: 60vh; overflow-y: auto;">
+                <!-- Product details will be injected here -->
+            </div>
+            <button id="closePreviewBtn" class="btn btn-secondary" style="margin-top: 20px; width: 100%;">Close Preview</button>
+        </div>
+    </div>
+    <!-- Add this above your other scripts -->
+    <script src="js/mammoth.browser.min.js"></script>
+    <script src="js/wamp-detector.js"></script>
+    <script src="js/seeder-generator.js"></script>
+    <script src="js/csv-handler.js"></script>
+    <script src="js/fs-access.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/constants.js"></script>
+    <script src="js/templates/q3-template.js"></script>
+    
+</body>
+</html>
