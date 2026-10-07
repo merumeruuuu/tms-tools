@@ -115,11 +115,10 @@ class DataSeederApp {
         });
     }
     previewProduct(index) {
-        this.editingProductIndex = index; // Track which product we are editing
+        this.editingProductIndex = index;
         const product = this.products[index];
         if (!product) return;
 
-        // Expanded mappings to ensure dropdowns work for all categorical fields
         const mappings = {
             productType: { '1': 'Ready-to-Feed Liquid', '2': 'Liquid Concentrate', '3': 'Powder' },
             categoryId: { '1': 'EBM', '2': 'DHM', '3': 'Formula', '5': 'Additive / Fortifier' },
@@ -129,12 +128,18 @@ class DataSeederApp {
             action: { 'create': 'Create', 'update': 'Update', 'barcode-update': 'Barcode Update' }
         };
 
-        const orderedKeys = [
+        let orderedKeys = [
             'action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode',
             'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
             'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared',
             'containerType', 'unitQuantity', 'measurementVolume', 'measurementUnit'
         ];
+
+        // If packaging hierarchy exists, remove redundant base fields so they are 
+        // cleanly grouped only at the bottom.
+        if (product.hierarchy && product.hierarchy.length > 0) {
+            orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume'].includes(k));
+        }
 
         const detailsContainer = document.getElementById('previewDetails');
         let html = '';
@@ -150,7 +155,6 @@ class DataSeederApp {
 
             let inputHtml = '';
             
-            // Generate Select dropdowns for mapped fields
             if (mappings[key]) {
                 inputHtml = `<select class="preview-input" data-key="${key}">`;
                 for (const [optVal, optLabel] of Object.entries(mappings[key])) {
@@ -159,11 +163,10 @@ class DataSeederApp {
                 }
                 inputHtml += `</select>`;
             } else {
-                // Generate Text/Number inputs for everything else
                 const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
                 const type = isNumber ? 'number' : 'text';
                 const step = isNumber ? 'any' : '';
-                const safeValue = value.toString().replace(/"/g, '&quot;'); // Prevent HTML breaking on quotes
+                const safeValue = value.toString().replace(/"/g, '&quot;'); 
                 
                 inputHtml = `<input type="${type}" step="${step}" class="preview-input" data-key="${key}" value="${safeValue}" placeholder="(Blank)">`;
             }
@@ -176,10 +179,67 @@ class DataSeederApp {
             `;
         }
 
+        // Replicate the Timeless UI design: Item header row + Form Factor(s) grey bars
+        if (product.hierarchy && product.hierarchy.length > 0) {
+            html += `
+            <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
+                <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
+                    <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
+                    <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
+                </div>
+                
+                <div style="padding: 15px;">
+                    <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
+            `;
+            
+            product.hierarchy.forEach((ff, i) => {
+                // If containerId is blank, apply a yellow warning highlight
+                const isMissing = !ff.containerId;
+                const highlightStyle = isMissing 
+                    ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
+                    : '';
+
+                let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
+                
+                // Add a blank placeholder option for missing data
+                if (isMissing) {
+                    typeSelect += `<option value="" selected disabled>Select Type...</option>`;
+                }
+
+                for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
+                    const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
+                    typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
+                }
+                typeSelect += `</select>`;
+
+                html += `
+                    <div style="background: #cbd5e1; border-radius: 4px; padding: 8px 12px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; color: #0f172a;">
+                        ${typeSelect}
+                        
+                        <span style="font-weight: bold; color: #334155;">[</span>
+                        <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 140px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
+                        <span style="font-weight: bold; color: #334155;">]</span>
+                        
+                        <span style="font-weight: bold; color: #334155; margin-left: 4px;">(</span>
+                        <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 50px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
+                        <span style="font-weight: bold; color: #334155;">)</span>
+                        
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+                            <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
+                            <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 70px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                </div>
+            </div>`;
+        }
+
         document.getElementById('previewTitle').textContent = `Edit: ${product.productName || 'Product'}`;
         detailsContainer.innerHTML = html;
         
-        // Upgrade the close button to a "Save" button
         const closeBtn = document.getElementById('closePreviewBtn');
         closeBtn.textContent = 'Save Changes';
         closeBtn.classList.remove('btn-secondary');
@@ -193,20 +253,32 @@ class DataSeederApp {
         const product = this.products[this.editingProductIndex];
         if (!product) return;
 
-        // Scrape all the inputs and save them back to the product object
-        const inputs = document.querySelectorAll('#previewDetails .preview-input');
-        inputs.forEach(input => {
+        // Save standard fields
+        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
+        standardInputs.forEach(input => {
             const key = input.dataset.key;
             let val = input.value;
             
-            // Ensure numbers stay as numbers in the data object
             const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
             if (isNumber) val = parseFloat(val) || 0;
             
             product[key] = val;
         });
 
-        // Re-render the main table to reflect changes and notify user
+        // Save hierarchy fields if they exist
+        if (product.hierarchy) {
+            const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
+            hierarchyInputs.forEach(input => {
+                const index = parseInt(input.dataset.hierarchyIndex, 10);
+                const key = input.dataset.key;
+                let val = input.value;
+                
+                if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
+                
+                product.hierarchy[index][key] = val;
+            });
+        }
+
         this.renderProductsTable();
         this.showStatus('Product updated successfully!', 'success');
         this.editingProductIndex = null;
@@ -277,7 +349,7 @@ class DataSeederApp {
                 'Expiration Once Prepared', 'Base Formula HL7 Reference Code',
                 'Fortifier HL7 Reference Code', 'Kitchen Recipe 1', 'Kitchen Recipe 2',
                 'Kitchen Recipe 3', 'Container 1', 'Container 2', 'Container 3',
-                'Type of Container', 'Barcode', 'Number of Containers', 'Volume'
+                'Type of Container', 'Barcode', 'Number of Containers', 'Volume', '2D barcode'
             ];
 
             const boundaryRegex = new RegExp(`(${knownLabels.join('|')})`, 'gi');
@@ -307,7 +379,6 @@ class DataSeederApp {
             };
 
             const rawName = getVal('Display Name');
-            const rawBarcode = getVal('Barcode');
             const rawItemNum = getVal('Item Number');
             const rawMfg = getVal('Manufacturer');
             const rawType = getVal('Product Type');
@@ -320,13 +391,11 @@ class DataSeederApp {
             const rawHl7Fort = getVal('Fortifier HL7 Reference Code');
             const rawContainer = getVal('Type of Container');
             const rawVolume = getVal('Unit Volume') || getVal('Volume');
+            const rawBarcode2D = getVal('2D barcode') || getVal('Barcode'); 
             
-            // NEW: HL7 Validation logic
-            // If the string contains MSH, PID, ORC segments, or too many delimiters, it's a raw dump.
             const isRawHl7Message = (str) => {
                 if (!str) return false;
                 const upperStr = str.toUpperCase();
-                // Check for standard HL7 segment headers or excessive caret delimiters
                 return upperStr.includes('MSH|') || 
                        upperStr.includes('MSH^') || 
                        upperStr.includes('PID|') || 
@@ -335,11 +404,11 @@ class DataSeederApp {
 
             const cleanHl7Base = isRawHl7Message(rawHl7Base) ? '' : rawHl7Base;
             const cleanHl7Fort = isRawHl7Message(rawHl7Fort) ? '' : rawHl7Fort;
+            
             if (!rawName) {
                 throw new Error('Could not find "Display Name". Ensure the uploaded .docx matches the Timeless form format.');
             }
 
-            // --- Smart Schema Mapping ---
             let typeId = '1'; 
             const tLower = rawType.toLowerCase();
             if (tLower.includes('powder')) typeId = '3';
@@ -399,16 +468,57 @@ class DataSeederApp {
                 }
             }
 
-            // Create object explicitly mapping Item Number and Barcode separately
+            // NEW: Parse the Container Hierarchy Table
+            const containerTypesRaw = getVal('Type of Container (Case, Carton, Bottle, Can, Packet)') || getVal('Type of Container');
+            const barcodesRaw = extractedData['barcode'] || '';
+            const quantitiesRaw = getVal('Number of Containers');
+            const volumesRaw = getVal('Volume');
+
+            const parseMulti = (str) => str.trim().split(/\s+/).filter(Boolean);
+            
+            const formFactors = [];
+            const types = parseMulti(containerTypesRaw);
+            const barcodes = parseMulti(barcodesRaw);
+            const quantities = parseMulti(quantitiesRaw);
+            
+            // STRICT EXTRACTION: Only pull numbers from the volume row, ignoring "ml/g/oz"
+            const volumes = volumesRaw.match(/[\d.]+/g) || [];
+
+            // Loop based on the longest array to ensure we don't drop columns with missing data
+            const maxCols = Math.max(types.length, barcodes.length, quantities.length, volumes.length);
+
+            for (let i = 0; i < maxCols; i++) {
+                let cid = ''; 
+                const typeLower = (types[i] || '').toLowerCase();
+                
+                if (typeLower.includes('bottle')) cid = '1';
+                else if (typeLower.includes('carton')) cid = '2';
+                else if (typeLower.includes('can')) cid = '3';
+                else if (typeLower.includes('case')) cid = '4';
+                else if (typeLower.includes('packet')) cid = '6';
+                else if (typeLower.includes('tetra')) cid = '10';
+
+                const bc = barcodes[i] || '';
+                const qty = parseInt(quantities[i]) || (i === maxCols - 1 ? 1 : 0);
+                const vol = parseFloat(volumes[i]) || 0; // Cleanly parsed volume
+
+                if (bc || qty || vol || cid) {
+                    formFactors.push({ containerId: cid, barcode: bc, quantity: qty, volume: vol });
+                }
+            }
+
+            // Reverse the array so the innermost unit is at index 0
+            const hierarchy = formFactors.reverse();
+
+
+
             const product = {
                 action: 'create',
                 manufacturer: rawMfg,
                 productName: rawName,
                 shortName: rawName, 
-                productCode: rawItemNum,      // The actual Item Number (e.g. 69310)
-                barcode: rawBarcode,          // The actual Barcode (e.g. 070074693095)
-                hl7Reference: rawHl7Base,
-                hl7Fortifier: rawHl7Fort,
+                productCode: rawItemNum,
+                barcode: rawBarcode2D,
                 productType: typeId,
                 productUse: useVal,
                 categoryId: catId,
@@ -419,9 +529,10 @@ class DataSeederApp {
                 containerType: containerId,
                 unitQuantity: 1,
                 measurementVolume: volVal,
-                hl7Reference: cleanHl7Base,   // Updated to use the clean version
+                hl7Reference: cleanHl7Base,
                 hl7Fortifier: cleanHl7Fort,
-                measurementUnit: unitVal
+                measurementUnit: unitVal,
+                hierarchy: hierarchy // NEW: Hierarchy array attached here
             };
 
             this.currentAction = 'create';

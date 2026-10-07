@@ -11,6 +11,88 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
             const canBeBase = product.productUse === 'base' ? 1 : 0;
             const canBeFortifier = product.productUse === 'fortifier' ? 1 : 0;
             const canBeModular = product.productUse === 'modular' ? 1 : 0;
+            
+            // Map the Javascript category ID back to its string name for the dynamic lookup
+            let catName = 'Formula';
+            if (product.categoryId == 5) catName = 'Additive';
+            else if (product.categoryId == 1) catName = 'EHM'; // Or EBM
+            else if (product.categoryId == 2) catName = 'DHM';
+
+            // Generate the dynamic hierarchy form factors
+            let formFactorCode = '';
+            if (product.hierarchy && product.hierarchy.length > 0) {
+                const ffMappings = { '1': 'Bottle', '2': 'Carton', '3': 'Can', '4': 'Case', '6': 'Packet', '10': 'Tetra Pak' };
+                
+                // The innermost unit is always index 0
+                const innerFfName = ffMappings[product.hierarchy[0].containerId] || 'Bottle';
+                
+                formFactorCode = `
+                $innerFfId = DB::table('nutrition_product_form_factor_types')->where('name', '${innerFfName}')->value('id') ?? 1;
+
+                $nptItem = NutritionProductTypeItem::create([
+                    '${C.ID}' => $product->${C.ID},
+                    '${C.ITEM_CODE}' => $barcode,
+                    '${C.FF_TYPE_ID}' => $innerFfId,
+                    '${C.UOM}' => $unitName,
+                    '${C.ITEM_VOL}' => ${product.hierarchy[0].volume || product.measurementVolume || 100},
+                    'formtypeitemName' => $productName,
+                    '${C.IS_PROTECTED}' => 1,
+                    'formtypeitemActive' => 1
+                ]);
+
+                $parentId = null;`;
+
+                // Loop the array BACKWARDS (from outermost container to innermost container)
+                for (let i = product.hierarchy.length - 1; i >= 0; i--) {
+                    const ff = product.hierarchy[i];
+                    const ffName = ffMappings[ff.containerId] || 'Bottle';
+                    
+                    formFactorCode += `
+                $ffType_${i} = DB::table('nutrition_product_form_factor_types')->where('name', '${ffName}')->value('id') ?? 1;
+                
+                $ff_${i} = NutritionProductTypeFormFactor::create([
+                    '${C.FF_TYPE_ID}' => $ffType_${i},
+                    '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
+                    '${C.FF_PARENT}' => $parentId,
+                    '${C.FF_BARCODE}' => '${ff.barcode}',
+                    '${C.FF_QTY}' => ${ff.quantity},
+                    '${C.IS_PROTECTED}' => 1,
+                    'formfactorActive' => 1,
+                    'created_at' => Carbon::now() 
+                ]);
+                $parentId = $ff_${i}->id; // The inner container will use this as its parent
+                `;
+                }
+                
+            } else {
+                // Fallback for missing hierarchy data
+                const fallbackFfName = 'Bottle'; 
+                formFactorCode = `
+                $fallbackFfId = DB::table('nutrition_product_form_factor_types')->where('name', '${fallbackFfName}')->value('id') ?? 1;
+
+                $nptItem = NutritionProductTypeItem::create([
+                    '${C.ID}' => $product->${C.ID},
+                    '${C.ITEM_CODE}' => $barcode,
+                    '${C.FF_TYPE_ID}' => $fallbackFfId,
+                    '${C.UOM}' => $unitName,
+                    '${C.ITEM_VOL}' => ${product.measurementVolume || 100},
+                    'formtypeitemName' => $productName,
+                    '${C.IS_PROTECTED}' => 1,
+                    'formtypeitemActive' => 1
+                ]);
+
+                NutritionProductTypeFormFactor::create([
+                    '${C.FF_TYPE_ID}' => $fallbackFfId,
+                    '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
+                    '${C.FF_PARENT}' => null,
+                    '${C.FF_BARCODE}' => $barcode,
+                    '${C.FF_QTY}' => ${product.unitQuantity || 1},
+                    '${C.IS_PROTECTED}' => 1,
+                    'formfactorActive' => 1,
+                    'created_at' => Carbon::now() 
+                ]);
+                `;
+            }
 
             return `
             $productName = '${product.productName.replace(/'/g, "\\'")}';
@@ -19,9 +101,25 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
             $product = NutritionProductType::where('${C.NAME}', $productName)->first();
 
             if (!$product) {
+                // Dynamic lookups to prevent hardcoded ID mismatches
+                $mfgSearch = '${(product.manufacturer || 'Undefined').replace(/'/g, "\\'")}';
+                
+                // Search both Name and Description columns, fallback to 3 (Undefined)
                 $mfgId = DB::table('${T.MANUFACTURERS}')
-                    ->where('ManufacturerName', 'like', '%${(product.manufacturer || 'Undefined').replace(/'/g, "\\'")}%')
-                    ->value('ManufacturerID') ?? 3;
+                    ->where('ManufacturerName', 'like', '%' . $mfgSearch . '%')
+                    ->orWhere('ManufacturerDescription', 'like', '%' . $mfgSearch . '%')
+                    ->value('ManufacturerID') 
+                    ?? DB::table('${T.MANUFACTURERS}')->where('ManufacturerName', 'Undefined')->value('ManufacturerID') ?? 3;
+
+                $catId = DB::table('nutrition_product_categories')
+                    ->where('name', 'like', '%${catName}%')
+                    ->value('id') ?? 3;
+
+                $unitName = '${product.measurementUnit || 'ml'}';
+                // Find numeric ID for context tables
+                $unitId = DB::table('nutrition_product_measurement_units')
+                    ->where('singularName', 'like', $unitName . '%')
+                    ->value('id') ?? ($unitName === 'g' ? 2 : 1);
 
                 $product = NutritionProductType::create([
                     '${C.NAME}' => $productName,
@@ -30,8 +128,8 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                     '${C.MFG_ID}' => $mfgId,
                     'formtypeSupportsDirectScanning' => 1,
                     '${C.TYPE}' => ${product.productType || 1},
-                    '${C.CATEGORY}' => ${product.categoryId || 3},
-                    '${C.UOM}' => '${product.measurementUnit || 'ml'}',
+                    '${C.CATEGORY}' => $catId,
+                    '${C.UOM}' => $unitName,
                     '${C.EXP_OPEN}' => ${product.expirationOpened || 48},
                     '${C.BASE_CAL}' => ${product.caloricValue || 20},
                     '${C.DISPLACEMENT}' => ${product.displacement || 1.00},
@@ -52,46 +150,24 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
 
                 DB::table('${T.ADDITIVE_CONTEXT}')->insert([
                     "productID" => $product->${C.ID},
-                    "measurementUnitID" => '${product.measurementUnit}' === 'ml' ? 1 : 2,
+                    "measurementUnitID" => $unitId,
                     "atomicUnitsPerMeasurementUnit" => 1,
-                    "decimalPlacesDisplayed" => '${product.measurementUnit}' === 'g' ? 1 : 0
+                    "decimalPlacesDisplayed" => $unitName === 'g' ? 1 : 0
                 ]);
 
-                $ffTypeId = ${product.containerType || 1}; 
+                ${formFactorCode}
 
                 $exists = DB::table('${T.APPLICABLE_FF}')
                     ->where('productTypeID', $product->${C.ID})
-                    ->where('formFactorTypeID', $ffTypeId)
+                    ->where('formFactorTypeID', $nptItem->${C.FF_TYPE_ID})
                     ->exists();
 
                 if (!$exists) {
                     DB::table('${T.APPLICABLE_FF}')->insert([
                         "productTypeID" => $product->${C.ID},
-                        "formFactorTypeID" => $ffTypeId
+                        "formFactorTypeID" => $nptItem->${C.FF_TYPE_ID}
                     ]);
                 }
-
-                $nptItem = NutritionProductTypeItem::create([
-                    '${C.ID}' => $product->${C.ID},
-                    '${C.ITEM_CODE}' => $barcode,
-                    '${C.FF_TYPE_ID}' => $ffTypeId,
-                    '${C.UOM}' => '${product.measurementUnit || 'ml'}',
-                    '${C.ITEM_VOL}' => ${product.measurementVolume || 100},
-                    'formtypeitemName' => $productName,
-                    '${C.IS_PROTECTED}' => 1,
-                    'formtypeitemActive' => 1
-                ]);
-
-                NutritionProductTypeFormFactor::create([
-                    '${C.FF_TYPE_ID}' => $ffTypeId,
-                    '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
-                    '${C.FF_PARENT}' => null,
-                    '${C.FF_BARCODE}' => $barcode,
-                    '${C.FF_QTY}' => ${product.unitQuantity || 1},
-                    '${C.IS_PROTECTED}' => 1,
-                    'formfactorActive' => 1,
-                    'created_at' => Carbon::now() 
-                ]);
 
                 NutritionProductTypeHistory::create([
                     'fthistBarcode'            => $barcode,
@@ -102,8 +178,8 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                     'fthistName'               => $productName,
                     'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
                     'fthistType'               => $product->${C.TYPE},
-                    'fthistCategoryID'         => $product->${C.CATEGORY},
-                    'fthistMeasurementUnit'    => $product->${C.UOM},
+                    'fthistCategoryID'         => $catId,
+                    'fthistMeasurementUnit'    => $unitName,
                     'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
                     'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
                     'fthistDisplacement'       => $product->${C.DISPLACEMENT},

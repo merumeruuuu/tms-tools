@@ -122,7 +122,6 @@ class CsvHandler {
                     lines.push(currentLine);
                 }
                 currentLine = '';
-                // Handle \r\n
                 if (char === '\r' && csv[i + 1] === '\n') {
                     i++;
                 }
@@ -178,6 +177,57 @@ class CsvHandler {
             if (containerVol > 200 && typeId === 3) containerId = 3; 
             if (getVal('Measurement Unit').toLowerCase() === 'g' && containerVol < 50) containerId = 6; 
 
+            // NEW: Parse the Form Factors column into the hierarchy array
+            const rawFormFactors = getVal('Form Factors');
+            const hierarchy = [];
+
+            if (rawFormFactors) {
+                const ffLines = rawFormFactors.split('\n').map(l => l.trim()).filter(Boolean);
+                for (let j = 0; j < ffLines.length; j++) {
+                    const ffLine = ffLines[j];
+                    
+                    let cid = ''; // UPDATED: Default to blank to trigger the yellow warning highlight
+                    const lowerLine = ffLine.toLowerCase();
+                    
+                    if (lowerLine.includes('bottle')) cid = '1';
+                    else if (lowerLine.includes('carton')) cid = '2';
+                    else if (lowerLine.includes('can')) cid = '3';
+                    else if (lowerLine.includes('case')) cid = '4';
+                    else if (lowerLine.includes('packet')) cid = '6';
+                    else if (lowerLine.includes('tetra')) cid = '10';
+
+                    // Extract barcode from brackets []
+                    const bcMatch = ffLine.match(/\[(.*?)\]/);
+                    const bc = bcMatch && bcMatch[1] ? bcMatch[1].trim() : '';
+
+                    // Extract quantity from parentheses ()
+                    const qtyMatch = ffLine.match(/\((\d+)\)/);
+                    const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+
+                    // Assign base volume to the innermost unit (the last one in the string), and 0 to outer containers
+                    const vol = (j === ffLines.length - 1) ? containerVol : 0;
+
+                    hierarchy.push({
+                        containerId: cid,
+                        barcode: bc,
+                        quantity: qty,
+                        volume: vol
+                    });
+                }
+                // Reverse the array so the innermost container is at index 0, matching the Word Doc parser
+                hierarchy.reverse();
+            }
+
+            // Fallback for simple flat CSVs without a Form Factors column
+            if (hierarchy.length === 0) {
+                hierarchy.push({
+                    containerId: containerId,
+                    barcode: getVal('Form Factor Barcode'),
+                    quantity: parseInt(getVal('Form Factor Unit Quantity')) || 1,
+                    volume: containerVol
+                });
+            }
+
             products.push({
                 action: action,
                 manufacturer: getVal('Manufacturer Description'),
@@ -198,7 +248,7 @@ class CsvHandler {
                 unitQuantity: parseInt(getVal('Form Factor Unit Quantity')) || 1,
                 measurementVolume: containerVol,
                 measurementUnit: getVal('Measurement Unit') || 'ml',
-                
+                hierarchy: hierarchy, // <-- Hierarchy added here!
                 updateFields: action === 'update' ? this.detectUpdateFields(rawHeaders, getVal) : []
             });
         }
