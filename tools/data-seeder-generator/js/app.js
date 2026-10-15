@@ -119,6 +119,15 @@ class DataSeederApp {
         const product = this.products[index];
         if (!product) return;
 
+        if (!product.hierarchy || product.hierarchy.length === 0) {
+            product.hierarchy = [{
+                containerId: product.containerType || '1',
+                barcode: product.barcode || '',
+                quantity: product.unitQuantity || 1,
+                volume: product.measurementVolume || 0
+            }];
+        }
+
         const mappings = {
             productType: { '1': 'Ready-to-Feed Liquid', '2': 'Liquid Concentrate', '3': 'Powder' },
             categoryId: { '1': 'EBM', '2': 'DHM', '3': 'Formula', '5': 'Additive / Fortifier' },
@@ -135,11 +144,7 @@ class DataSeederApp {
             'containerType', 'unitQuantity', 'measurementVolume', 'measurementUnit'
         ];
 
-        // If packaging hierarchy exists, remove redundant base fields so they are 
-        // cleanly grouped only at the bottom.
-        if (product.hierarchy && product.hierarchy.length > 0) {
-            orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume'].includes(k));
-        }
+        orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume'].includes(k));
 
         const detailsContainer = document.getElementById('previewDetails');
         let html = '';
@@ -153,10 +158,18 @@ class DataSeederApp {
             if (key === 'hl7Reference') formattedLabel = 'Base HL7 Reference';
             if (key === 'hl7Fortifier') formattedLabel = 'Fortifier HL7 Reference';
 
+            const isMissing = (value === '');
+            const highlightStyle = isMissing 
+                ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5); border-radius: 4px;' 
+                : '';
+
             let inputHtml = '';
             
             if (mappings[key]) {
-                inputHtml = `<select class="preview-input" data-key="${key}">`;
+                inputHtml = `<select class="preview-input" data-key="${key}" style="${highlightStyle}">`;
+                if (isMissing) {
+                    inputHtml += `<option value="" selected disabled>Select...</option>`;
+                }
                 for (const [optVal, optLabel] of Object.entries(mappings[key])) {
                     const selected = (value.toString() === optVal.toString()) ? 'selected' : '';
                     inputHtml += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
@@ -168,77 +181,88 @@ class DataSeederApp {
                 const step = isNumber ? 'any' : '';
                 const safeValue = value.toString().replace(/"/g, '&quot;'); 
                 
-                inputHtml = `<input type="${type}" step="${step}" class="preview-input" data-key="${key}" value="${safeValue}" placeholder="(Blank)">`;
+                inputHtml = `<input type="${type}" step="${step}" class="preview-input" data-key="${key}" value="${safeValue}" placeholder="(Blank)" style="${highlightStyle}">`;
             }
 
             html += `
                 <div class="preview-grid">
                     <div class="preview-label">${formattedLabel}</div>
-                    <div class="preview-value">${inputHtml}</div>
+                    <div class="preview-value" style="padding: 2px 0;">${inputHtml}</div>
                 </div>
             `;
         }
 
-        // Replicate the Timeless UI design: Item header row + Form Factor(s) grey bars
-        if (product.hierarchy && product.hierarchy.length > 0) {
-            html += `
-            <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
-                <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
-                    <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
-                    <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
-                </div>
-                
-                <div style="padding: 15px;">
-                    <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
-            `;
+        html += `
+        <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
+            <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
+                <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
+                <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
+            </div>
             
-            product.hierarchy.forEach((ff, i) => {
-                // If containerId is blank, apply a yellow warning highlight
-                const isMissing = !ff.containerId;
-                const highlightStyle = isMissing 
-                    ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
-                    : '';
+            <div style="padding: 15px;">
+                <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
+        `;
+        
+        product.hierarchy.forEach((ff, i) => {
+            const isMissing = !ff.containerId;
+            const highlightStyle = isMissing 
+                ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
+                : '';
 
-                let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
-                
-                // Add a blank placeholder option for missing data
-                if (isMissing) {
-                    typeSelect += `<option value="" selected disabled>Select Type...</option>`;
-                }
+            let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
+            
+            if (isMissing) typeSelect += `<option value="" selected disabled>Select Type...</option>`;
+            
+            for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
+                const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
+                typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
+            }
+            typeSelect += `</select>`;
 
-                for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
-                    const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
-                    typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
-                }
-                typeSelect += `</select>`;
+            // Only allow removing if it's not the very last remaining item
+            const removeBtn = product.hierarchy.length > 1 
+                ? `<button type="button" class="remove-preview-ff-btn" data-index="${i}" title="Remove Container" style="background:none; border:none; color:#ef4444; font-size:18px; font-weight:bold; cursor:pointer; margin-left: 6px; padding: 0 4px; line-height: 1;">&times;</button>`
+                : `<span style="width: 20px; margin-left: 6px;"></span>`;
 
-                html += `
-                    <div style="background: #cbd5e1; border-radius: 4px; padding: 8px 12px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; color: #0f172a;">
-                        ${typeSelect}
-                        
-                        <span style="font-weight: bold; color: #334155;">[</span>
-                        <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 140px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
-                        <span style="font-weight: bold; color: #334155;">]</span>
-                        
-                        <span style="font-weight: bold; color: #334155; margin-left: 4px;">(</span>
-                        <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 50px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
-                        <span style="font-weight: bold; color: #334155;">)</span>
-                        
-                        <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
-                            <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
-                            <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 70px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
-                        </div>
-                    </div>
-                `;
-            });
-
+            // Enforced flex-wrap: nowrap and slightly smaller input widths to prevent the drop-down effect
             html += `
+                <div style="background: #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; font-size: 13px; color: #0f172a; overflow-x: auto;">
+                    ${typeSelect}
+                    
+                    <span style="font-weight: bold; color: #334155; margin-left: 2px;">[</span>
+                    <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 100px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto; font-family: monospace;">
+                    <span style="font-weight: bold; color: #334155;">]</span>
+                    
+                    <span style="font-weight: bold; color: #334155; margin-left: 2px;">(</span>
+                    <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 40px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
+                    <span style="font-weight: bold; color: #334155;">)</span>
+                    
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                        <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
+                        <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 55px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
+                    </div>
+                    ${removeBtn}
                 </div>
-            </div>`;
-        }
+            `;
+        });
+
+        html += `
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary btn-small" id="addPreviewContainerBtn" style="background: #f1f5f9; border: 1px dashed #94a3b8; color: #475569;">+ Add Outer Container</button>
+                </div>
+            </div>
+        </div>`;
 
         document.getElementById('previewTitle').textContent = `Edit: ${product.productName || 'Product'}`;
         detailsContainer.innerHTML = html;
+        
+        // Attach listeners to buttons
+        const addContainerBtn = document.getElementById('addPreviewContainerBtn');
+        if (addContainerBtn) addContainerBtn.onclick = () => this.addPreviewFormFactor();
+
+        document.querySelectorAll('.remove-preview-ff-btn').forEach(btn => {
+            btn.onclick = (e) => this.removePreviewFormFactor(parseInt(e.target.dataset.index, 10));
+        });
         
         const closeBtn = document.getElementById('closePreviewBtn');
         closeBtn.textContent = 'Save Changes';
@@ -282,6 +306,77 @@ class DataSeederApp {
         this.renderProductsTable();
         this.showStatus('Product updated successfully!', 'success');
         this.editingProductIndex = null;
+    }
+    addPreviewFormFactor() {
+        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
+        const product = this.products[this.editingProductIndex];
+        if (!product) return;
+
+        // 1. Scrape current inputs so we don't lose unsaved changes on refresh
+        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
+        standardInputs.forEach(input => {
+            const key = input.dataset.key;
+            let val = input.value;
+            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
+            if (isNumber) val = parseFloat(val) || 0;
+            product[key] = val;
+        });
+
+        if (product.hierarchy) {
+            const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
+            hierarchyInputs.forEach(input => {
+                const index = parseInt(input.dataset.hierarchyIndex, 10);
+                const key = input.dataset.key;
+                let val = input.value;
+                if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
+                product.hierarchy[index][key] = val;
+            });
+        }
+
+        // 2. Add a new blank outer container to the array
+        if (!product.hierarchy) product.hierarchy = [];
+        product.hierarchy.push({
+            containerId: '', // Blank so it triggers your yellow warning highlight!
+            barcode: '',
+            quantity: 0,
+            volume: 0
+        });
+
+        // 3. Refresh the modal
+        this.previewProduct(this.editingProductIndex);
+    }
+    removePreviewFormFactor(index) {
+        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
+        const product = this.products[this.editingProductIndex];
+        if (!product || !product.hierarchy) return;
+
+        // Scrape current inputs to prevent losing unsaved data
+        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
+        standardInputs.forEach(input => {
+            const key = input.dataset.key;
+            let val = input.value;
+            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
+            if (isNumber) val = parseFloat(val) || 0;
+            product[key] = val;
+        });
+
+        const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
+        hierarchyInputs.forEach(input => {
+            const i = parseInt(input.dataset.hierarchyIndex, 10);
+            // Skip the row we are about to delete
+            if (i === index) return; 
+            
+            const key = input.dataset.key;
+            let val = input.value;
+            if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
+            product.hierarchy[i][key] = val;
+        });
+
+        // Remove the row from the array
+        product.hierarchy.splice(index, 1);
+
+        // Refresh the modal
+        this.previewProduct(this.editingProductIndex);
     }
     async handleDocUpload(event) {
         const files = event.target.files;
@@ -383,14 +478,14 @@ class DataSeederApp {
             const rawMfg = getVal('Manufacturer');
             const rawType = getVal('Product Type');
             const rawUse = getVal('Product Use');
-            const rawCaloric = getVal('Caloric Density') || getVal('Caloric Range');
+            const rawCaloric = `${getVal('Caloric Density')} ${getVal('Caloric Range')}`;
             const rawDisplacement = getVal('Displacement');
             const rawExpOpen = getVal('Expiration Once Opened');
             const rawExpPrep = getVal('Expiration Once Prepared');
             const rawHl7Base = getVal('Base Formula HL7 Reference Code');
             const rawHl7Fort = getVal('Fortifier HL7 Reference Code');
             const rawContainer = getVal('Type of Container');
-            const rawVolume = getVal('Unit Volume') || getVal('Volume');
+            const rawVolume = `${getVal('Unit Volume')} ${getVal('Volume')}`;
             const rawBarcode2D = getVal('2D barcode') || getVal('Barcode'); 
             
             const isRawHl7Message = (str) => {
@@ -734,13 +829,26 @@ async ensureSeedersFolder() {
         const fields = this.getFormFields(actionType);
 
         if (actionType === 'update') {
+            const layout = document.createElement('div');
+            layout.className = 'update-module-container';
+
             const selectorPanel = document.createElement('div');
-            selectorPanel.className = 'update-field-selector-panel';
+            selectorPanel.className = 'update-selector-panel';
+            
+            const helperText = document.createElement('div');
+            helperText.className = 'field-selection-hint';
+            helperText.innerHTML = '<strong>Select Fields to Update:</strong> Click the properties you need to change. The input fields will appear below.';
+            selectorPanel.appendChild(helperText);
+
             const editorPanel = document.createElement('div');
-            editorPanel.className = 'update-field-editor-panel';
+            // Reuses the form-grid class so the input fields nicely align in 2 columns
+            editorPanel.className = 'update-editor-panel form-grid'; 
 
             fields.forEach(field => {
-                if (field.type === 'checkbox-group') {
+                if (field.name === 'productName') {
+                    // Extract the main product name to sit above the module
+                    gridWrapper.appendChild(this.createFormField(field));
+                } else if (field.type === 'checkbox-group') {
                     selectorPanel.appendChild(this.createFormField(field));
                 } else if (field.type === 'conditional-input') {
                     editorPanel.appendChild(this.createFormField(field));
@@ -749,18 +857,12 @@ async ensureSeedersFolder() {
                 }
             });
 
-            const helperText = document.createElement('div');
-            helperText.className = 'field-selection-hint';
-            helperText.textContent = 'Check each field you want to update. The value field appears on the right only when selected.';
-            selectorPanel.appendChild(helperText);
-
-            const layout = document.createElement('div');
-            layout.className = 'update-field-layout';
             layout.appendChild(selectorPanel);
             layout.appendChild(editorPanel);
             gridWrapper.appendChild(layout);
 
             container.appendChild(gridWrapper);
+            
             this.syncConditionalFieldVisibility();
             const checkboxGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
             if (checkboxGroup) {
@@ -815,21 +917,13 @@ async ensureSeedersFolder() {
                 { name: 'expirationPrepared', label: 'Expiration Once Prepared (Hours)', type: 'number', value: 48, numeric: true },
 
                 { type: 'section', label: 'Packaging' },
-                { name: 'containerType', label: 'Type of Container', type: 'select', value: '1', options: [
-                    { value: '1', label: 'Bottle' },
-                    { value: '2', label: 'Carton' },
-                    { value: '3', label: 'Can' },
-                    { value: '4', label: 'Case' },
-                    { value: '6', label: 'Packet' },
-                    { value: '10', label: 'Tetra Pak' }
-                ]},
-                { name: 'unitQuantity', label: 'Number of Containers', type: 'number', value: 1, numeric: true },
-                { name: 'measurementVolume', label: 'Unit Volume', type: 'number', value: 100, step: 0.1, numeric: true },
                 { name: 'measurementUnit', label: 'Measurement Unit', type: 'select', value: 'ml', options: [
                     { value: 'ml', label: 'mL' },
                     { value: 'g', label: 'g' },
                     { value: 'oz', label: 'oz' }
                 ]},
+                // Replaces the old static inputs with a dynamic builder
+                { name: 'hierarchy', label: 'Packaging Hierarchy (Top = Innermost Unit)', type: 'packaging-hierarchy' }
             ],
             'update': [
                 { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
@@ -858,7 +952,70 @@ async ensureSeedersFolder() {
         };
         return fields[actionType] || [];
     }
+    addHierarchyRow(container, isInner = false) {
+        const row = document.createElement('div');
+        row.className = 'hierarchy-row';
+        row.style.display = 'flex';
+        row.style.gap = '6px';
+        row.style.alignItems = 'center';
 
+        const typeSel = document.createElement('select');
+        typeSel.className = 'hierarchy-type input-field';
+        typeSel.style.flex = '2';
+        typeSel.style.padding = '8px 6px';
+        typeSel.innerHTML = `
+            <option value="1">Bottle</option>
+            <option value="2">Carton</option>
+            <option value="3">Can</option>
+            <option value="4">Case</option>
+            <option value="6">Packet</option>
+            <option value="10">Tetra Pak</option>
+        `;
+        if (!isInner) typeSel.value = '4'; // Default to Case for outer containers
+
+        const bcIn = document.createElement('input');
+        bcIn.type = 'text';
+        bcIn.className = 'hierarchy-bc input-field';
+        bcIn.placeholder = 'Barcode';
+        bcIn.style.flex = '3';
+        bcIn.style.padding = '8px 6px';
+
+        const qtyIn = document.createElement('input');
+        qtyIn.type = 'number';
+        qtyIn.className = 'hierarchy-qty input-field';
+        qtyIn.placeholder = 'Qty';
+        qtyIn.value = isInner ? '1' : '';
+        qtyIn.style.flex = '1.2';
+        qtyIn.style.padding = '8px 6px';
+
+        const volIn = document.createElement('input');
+        volIn.type = 'number';
+        volIn.step = 'any';
+        volIn.className = 'hierarchy-vol input-field';
+        volIn.placeholder = 'Vol';
+        volIn.style.flex = '1.2';
+        volIn.style.padding = '8px 6px';
+
+        row.appendChild(typeSel);
+        row.appendChild(bcIn);
+        row.appendChild(qtyIn);
+        row.appendChild(volIn);
+
+        if (!isInner) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.innerHTML = '×';
+            removeBtn.style.cssText = 'background:none; border:none; color:#ef4444; cursor:pointer; font-size:20px; font-weight:bold; padding:0 4px;';
+            removeBtn.onclick = () => row.remove();
+            row.appendChild(removeBtn);
+        } else {
+            const spacer = document.createElement('div');
+            spacer.style.width = '24px';
+            row.appendChild(spacer);
+        }
+
+        container.appendChild(row);
+    }
     createFormField(field) {
         if (field.type === 'section') {
             const heading = document.createElement('h4');
@@ -869,11 +1026,14 @@ async ensureSeedersFolder() {
 
         const group = document.createElement('div');
         group.className = 'product-form-group';
-        if (field.fullWidth) group.classList.add('full-width');
+        if (field.fullWidth || field.type === 'checkbox-group') group.classList.add('full-width');
 
-        const label = document.createElement('label');
-        label.textContent = field.label;
-        group.appendChild(label);
+        // Skip adding the standard label for the checkbox group to keep the UI clean
+        if (field.type !== 'checkbox-group') {
+            const label = document.createElement('label');
+            label.textContent = field.label;
+            group.appendChild(label);
+        }
 
         if (field.type === 'select') {
             const select = document.createElement('select');
@@ -898,15 +1058,25 @@ async ensureSeedersFolder() {
             checkboxWrap.dataset.fieldName = field.name;
 
             const selectedValues = Array.isArray(field.value) ? field.value : [];
+            
             field.options.forEach(opt => {
                 const row = document.createElement('label');
-                row.className = 'field-checkbox-row';
+                row.className = 'field-checkbox-row checkbox-pill';
+                
+                const isChecked = selectedValues.includes(opt.value);
+                if (isChecked) row.classList.add('selected');
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'field-checkbox';
                 checkbox.dataset.fieldValue = opt.value;
-                checkbox.checked = selectedValues.includes(opt.value);
+                checkbox.checked = isChecked;
+
+                // Sync the blue pill styling when toggled
+                checkbox.addEventListener('change', (e) => {
+                    if(e.target.checked) row.classList.add('selected');
+                    else row.classList.remove('selected');
+                });
 
                 const text = document.createElement('span');
                 text.textContent = opt.label;
@@ -956,7 +1126,38 @@ async ensureSeedersFolder() {
 
             return wrapper;
         }
+        if (field.type === 'packaging-hierarchy') {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'product-form-group full-width';
+            wrapper.dataset.fieldName = field.name;
 
+            const labelEl = document.createElement('label');
+            labelEl.textContent = field.label;
+            wrapper.appendChild(labelEl);
+
+            const listContainer = document.createElement('div');
+            listContainer.className = 'hierarchy-list';
+            listContainer.style.display = 'flex';
+            listContainer.style.flexDirection = 'column';
+            listContainer.style.gap = '8px';
+            listContainer.style.marginBottom = '12px';
+
+            wrapper.appendChild(listContainer);
+
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'btn btn-secondary btn-small';
+            addBtn.innerHTML = '+ Add Outer Container';
+            addBtn.style.width = '100%';
+            addBtn.onclick = () => this.addHierarchyRow(listContainer);
+            
+            wrapper.appendChild(addBtn);
+
+            // Automatically inject the required innermost unit row
+            this.addHierarchyRow(listContainer, true);
+
+            return wrapper;
+        }
         const input = document.createElement('input');
         input.type = field.type || 'text';
         input.dataset.fieldName = field.name;
@@ -1034,6 +1235,21 @@ async ensureSeedersFolder() {
                 }
             }
 
+            if (field.type === 'packaging-hierarchy') {
+                const rows = document.querySelectorAll(`#productFormFields [data-field-name="${field.name}"] .hierarchy-row`);
+                const hierarchy = [];
+                rows.forEach((row, index) => {
+                    hierarchy.push({
+                        containerId: row.querySelector('.hierarchy-type').value,
+                        barcode: row.querySelector('.hierarchy-bc').value.trim(),
+                        quantity: parseInt(row.querySelector('.hierarchy-qty').value) || (index === 0 ? 1 : 0),
+                        volume: parseFloat(row.querySelector('.hierarchy-vol').value) || 0
+                    });
+                });
+                data[field.name] = hierarchy;
+                return;
+            }
+
             const el = document.querySelector(`#productFormFields [data-field-name="${field.name}"] input, #productFormFields [data-field-name="${field.name}"] select`);
             const raw = el ? el.value : '';
             data[field.name] = field.numeric ? (parseFloat(raw) || 0) : raw;
@@ -1076,6 +1292,15 @@ async ensureSeedersFolder() {
                 const input = el.querySelector('input, select');
                 if (input) {
                     input.disabled = true;
+                }
+                return;
+            }
+
+            if (field.type === 'packaging-hierarchy') {
+                const listContainer = document.querySelector(`#productFormFields [data-field-name="${field.name}"] .hierarchy-list`);
+                if (listContainer) {
+                    listContainer.innerHTML = '';
+                    this.addHierarchyRow(listContainer, true);
                 }
                 return;
             }
