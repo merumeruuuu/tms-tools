@@ -708,7 +708,23 @@ const loadRemoteContent = async (file, isBulk = false) => {
                         
                         alert(alertMsg);
                     } catch (parseErr) {
-                        // If it's a native Chrome network error (like "Failed to fetch")
+                        // Check if it's the raw HTML 404 error page from Laravel
+                        if (e.message.includes('<title>Not Found</title>') || e.message.includes('404')) {
+                            if (selectedTmsUrl.value.includes('.local')) {
+                                
+                                // FORCE RE-TRIGGER INJECTION!
+                                window.parent.postMessage({
+                                    action: 'INJECT_API',
+                                    url: selectedTmsUrl.value,
+                                    apiKey: ENV_QA_API_KEY
+                                }, '*');
+
+                                alert("Searching Local build!\n\nThe Simulator is attempting to inject the secure endpoint into this Laravel build right now.\n\nMake sure to grant folder permissions if Chrome asks. Wait a few seconds, then click 'Fetching...' again.");
+                                return;
+                            }
+                        }
+                        
+                        // If it's not a 404 or not a local URL, show the standard network error
                         alert("Network Error: " + e.message);
                     }
                 }
@@ -783,23 +799,59 @@ const loadRemoteContent = async (file, isBulk = false) => {
             setTimeout(() => { codeEditor.layout(); triggerRender(); }, 50);
         };
 
-        const addTmsUrl = () => {
+        // const addTmsUrl = () => {    
+        //     let rawUrl = newTmsUrl.value.trim();
+        //     if (!rawUrl) return alert("Please enter a valid URL.");
+            
+        //     // 1. Ensure a protocol exists so the JS URL parser doesn't crash
+        //     if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        //         rawUrl = 'https://' + rawUrl; 
+        //     }
+
+        //     try {
+        //         // 2. Use the native URL parser to strip away any /api/ paths or ?queries
+        //         const parsedUrl = new URL(rawUrl);
+        //         const cleanHost = parsedUrl.host; // Extracts strictly the domain (and port if applicable)
+
+        //         // 3. Smart Protocol: Force http for .local environments, https for everything else
+        //         const protocol = cleanHost.includes('.local') ? 'http://' : 'https://';
+        //         const finalUrl = protocol + cleanHost;
+
+        //         if (!tmsUrls.value.includes(finalUrl)) {
+        //             tmsUrls.value.push(finalUrl);
+        //             localStorage.setItem('tms_qa_urls', JSON.stringify(tmsUrls.value));
+        //         }
+                
+        //         selectedTmsUrl.value = finalUrl;
+        //         newTmsUrl.value = '';       
+        //         tmsFiles.value = [];        
+        //     } catch (e) {
+        //         alert("Invalid URL format. Please try again.");
+        //     }
+        // };
+        const addTmsUrl = async () => {
             let rawUrl = newTmsUrl.value.trim();
             if (!rawUrl) return alert("Please enter a valid URL.");
             
-            // 1. Ensure a protocol exists so the JS URL parser doesn't crash
             if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
                 rawUrl = 'https://' + rawUrl; 
             }
 
             try {
-                // 2. Use the native URL parser to strip away any /api/ paths or ?queries
                 const parsedUrl = new URL(rawUrl);
-                const cleanHost = parsedUrl.host; // Extracts strictly the domain (and port if applicable)
-
-                // 3. Smart Protocol: Force http for .local environments, https for everything else
+                const cleanHost = parsedUrl.host; 
                 const protocol = cleanHost.includes('.local') ? 'http://' : 'https://';
                 const finalUrl = protocol + cleanHost;
+
+                // --- AUTO INJECTOR BRIDGE ---
+                if (cleanHost.includes('.local')) {
+                    // Ask the parent window to handle the file system!
+                    window.parent.postMessage({
+                        action: 'INJECT_API',
+                        url: finalUrl,
+                        apiKey: ENV_QA_API_KEY
+                    }, '*');
+                }
 
                 if (!tmsUrls.value.includes(finalUrl)) {
                     tmsUrls.value.push(finalUrl);
@@ -813,7 +865,6 @@ const loadRemoteContent = async (file, isBulk = false) => {
                 alert("Invalid URL format. Please try again.");
             }
         };
-
         const removeTmsUrl = () => {
             if (!selectedTmsUrl.value) return;
             if (!confirm(`Remove ${selectedTmsUrl.value} from your list?`)) return;
