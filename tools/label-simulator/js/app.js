@@ -657,46 +657,46 @@ const loadRemoteContent = async (file, isBulk = false) => {
         };
 
         const fetchFileList = async () => {
-    isLoading.value = true;
-    loading.value = true;
-    try {
-        const storageKey = 'tms_remote_' + selectedTmsUrl.value;
-        const previousSnapshot = sessionStorage.getItem(storageKey);
-        const existingFileNames = new Set(previousSnapshot ? JSON.parse(previousSnapshot) : []);
-        
-        const rawData = await extensionFetch(`${selectedTmsUrl.value}/api/customer/interoperability/labels/fetch`, { 
-            'X-QA-Key': ENV_QA_API_KEY 
-        });
-        
-        const parsedData = JSON.parse(rawData);
-        const filenames = Array.isArray(parsedData) ? parsedData : (parsedData.files || []);
-        
-        if (parsedData.active_path && !Array.isArray(parsedData)) {
-            console.log("✅ Locked onto server path:", parsedData.active_path);
-            
-            // Checks memory so we don't spam the user with alerts!
-            const lastAlertPath = sessionStorage.getItem('tms_last_alert_path');
-            
-            if (lastAlertPath !== parsedData.active_path) {
-                alert(`✅ API Connection Successful!\n\nThe server locked onto this directory:\n${parsedData.active_path}\n\nFound ${filenames.length} labels.`);
-                // Memorize this path so it stays silent next time
-                sessionStorage.setItem('tms_last_alert_path', parsedData.active_path);
-            }
-        }
-        
-        const isFirstLoad = !previousSnapshot;
-        
-        fileList.value = filenames.map((name, index) => {
-            return {
-                id: 'tms_' + index, name: name, content: '', 
-                isRemote: true, isNew: !isFirstLoad && !existingFileNames.has(name), isViewed: false
-            };
-        });
-        
-        sessionStorage.setItem(storageKey, JSON.stringify(filenames));
-        currentViewMode.value = 'remote';
-        selectedFiles.value = [];
-    } catch (e) {
+            isLoading.value = true;
+            loading.value = true;
+            try {
+                const storageKey = 'tms_remote_' + selectedTmsUrl.value;
+                const previousSnapshot = sessionStorage.getItem(storageKey);
+                const existingFileNames = new Set(previousSnapshot ? JSON.parse(previousSnapshot) : []);
+                
+                const rawData = await extensionFetch(`${selectedTmsUrl.value}/api/customer/interoperability/labels/fetch`, { 
+                    'X-QA-Key': ENV_QA_API_KEY 
+                });
+                
+                const parsedData = JSON.parse(rawData);
+                const filenames = Array.isArray(parsedData) ? parsedData : (parsedData.files || []);
+                
+                if (parsedData.active_path && !Array.isArray(parsedData)) {
+                    console.log("✅ Locked onto server path:", parsedData.active_path);
+                    
+                    // Checks memory so we don't spam the user with alerts!
+                    const lastAlertPath = sessionStorage.getItem('tms_last_alert_path');
+                    
+                    if (lastAlertPath !== parsedData.active_path) {
+                        alert(`✅ API Connection Successful!\n\nThe server locked onto this directory:\n${parsedData.active_path}\n\nFound ${filenames.length} labels.`);
+                        // Memorize this path so it stays silent next time
+                        sessionStorage.setItem('tms_last_alert_path', parsedData.active_path);
+                    }
+                }
+                
+                const isFirstLoad = !previousSnapshot;
+                
+                fileList.value = filenames.map((name, index) => {
+                    return {
+                        id: 'tms_' + index, name: name, content: '', 
+                        isRemote: true, isNew: !isFirstLoad && !existingFileNames.has(name), isViewed: false
+                    };
+                });
+                
+                sessionStorage.setItem(storageKey, JSON.stringify(filenames));
+                currentViewMode.value = 'remote';
+                selectedFiles.value = [];
+            } catch (e) {
                 if (selectedTmsUrl.value) {
                     try {
                         //  Try to parse the rich JSON clue from the backend!
@@ -710,8 +710,10 @@ const loadRemoteContent = async (file, isBulk = false) => {
                     } catch (parseErr) {
                         // Check if it's the raw HTML 404 error page from Laravel
                         if (e.message.includes('<title>Not Found</title>') || e.message.includes('404')) {
-                            if (selectedTmsUrl.value.includes('.local')) {
-                                
+                            
+                            const isLocalEnv = selectedTmsUrl.value.includes('.local') || selectedTmsUrl.value.includes('.test') || selectedTmsUrl.value.includes('localhost') || selectedTmsUrl.value.match(/^\d+\.\d+\.\d+\.\d+/);
+
+                            if (isLocalEnv) {
                                 // FORCE RE-TRIGGER INJECTION!
                                 window.parent.postMessage({
                                     action: 'INJECT_API',
@@ -729,9 +731,9 @@ const loadRemoteContent = async (file, isBulk = false) => {
                     }
                 }
             } finally {
-        setTimeout(() => { isLoading.value = false; loading.value = false; }, 1000);
-    }
-};
+                setTimeout(() => { isLoading.value = false; loading.value = false; }, 1000);
+            }
+        };
 
         const toggleFileSelection = async (file) => {
             file.isViewed = true;
@@ -840,11 +842,13 @@ const loadRemoteContent = async (file, isBulk = false) => {
             try {
                 const parsedUrl = new URL(rawUrl);
                 const cleanHost = parsedUrl.host; 
-                const protocol = cleanHost.includes('.local') ? 'http://' : 'https://';
+                
+                const isLocalEnv = cleanHost.includes('.local') || cleanHost.includes('.test') || cleanHost.includes('localhost') || cleanHost.match(/^\d+\.\d+\.\d+\.\d+/);
+                const protocol = isLocalEnv ? 'http://' : 'https://';
                 const finalUrl = protocol + cleanHost;
 
                 // --- AUTO INJECTOR BRIDGE ---
-                if (cleanHost.includes('.local')) {
+                if (isLocalEnv) {
                     // Ask the parent window to handle the file system!
                     window.parent.postMessage({
                         action: 'INJECT_API',
