@@ -98,31 +98,30 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
             $productName = '${product.productName.replace(/'/g, "\\'")}';
             $barcode = '${product.productCode}';
 
-            $product = NutritionProductType::where('${C.NAME}', $productName)->first();
+            // Dynamic lookups to prevent hardcoded ID mismatches
+            $mfgSearch = '${(product.manufacturer || 'Undefined').replace(/'/g, "\\'")}';
+            
+            // Search both Name and Description columns, fallback to 3 (Undefined)
+            $mfgId = DB::table('${T.MANUFACTURERS}')
+                ->where('ManufacturerName', 'like', '%' . $mfgSearch . '%')
+                ->orWhere('ManufacturerDescription', 'like', '%' . $mfgSearch . '%')
+                ->value('ManufacturerID') 
+                ?? DB::table('${T.MANUFACTURERS}')->where('ManufacturerName', 'Undefined')->value('ManufacturerID') ?? 3;
 
-            if (!$product) {
-                // Dynamic lookups to prevent hardcoded ID mismatches
-                $mfgSearch = '${(product.manufacturer || 'Undefined').replace(/'/g, "\\'")}';
-                
-                // Search both Name and Description columns, fallback to 3 (Undefined)
-                $mfgId = DB::table('${T.MANUFACTURERS}')
-                    ->where('ManufacturerName', 'like', '%' . $mfgSearch . '%')
-                    ->orWhere('ManufacturerDescription', 'like', '%' . $mfgSearch . '%')
-                    ->value('ManufacturerID') 
-                    ?? DB::table('${T.MANUFACTURERS}')->where('ManufacturerName', 'Undefined')->value('ManufacturerID') ?? 3;
+            $catId = DB::table('nutrition_product_categories')
+                ->where('name', 'like', '%${catName}%')
+                ->value('id') ?? 3;
 
-                $catId = DB::table('nutrition_product_categories')
-                    ->where('name', 'like', '%${catName}%')
-                    ->value('id') ?? 3;
+            $unitName = '${product.measurementUnit || 'ml'}';
+            // Find numeric ID for context tables
+            $unitId = DB::table('nutrition_product_measurement_units')
+                ->where('singularName', 'like', $unitName . '%')
+                ->value('id') ?? ($unitName === 'g' ? 2 : 1);
 
-                $unitName = '${product.measurementUnit || 'ml'}';
-                // Find numeric ID for context tables
-                $unitId = DB::table('nutrition_product_measurement_units')
-                    ->where('singularName', 'like', $unitName . '%')
-                    ->value('id') ?? ($unitName === 'g' ? 2 : 1);
-
-                $product = NutritionProductType::create([
-                    '${C.NAME}' => $productName,
+            // 1. Find or Create the Base Product
+            $product = NutritionProductType::firstOrCreate(
+                ['${C.NAME}' => $productName],
+                [
                     '${C.SHORT_NAME}' => '${(product.shortName || product.productName).replace(/'/g, "\\'")}',
                     '${C.HL7_REF}' => '${product.hl7Reference || ''}',
                     '${C.MFG_ID}' => $mfgId,
@@ -144,8 +143,11 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                     '${C.BARCODE}' => $barcode,
                     '${C.ACTIVE}' => 1,
                     'useAsDbm' => 0
-                ]);
+                ]
+            );
 
+            // 2. Only insert History and Context tables if it's a brand new product
+            if ($product->wasRecentlyCreated) {
                 $product->update(['${C.ORDER}' => $product->${C.ID}]);
 
                 DB::table('${T.ADDITIVE_CONTEXT}')->insert([
@@ -154,20 +156,6 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                     "atomicUnitsPerMeasurementUnit" => 1,
                     "decimalPlacesDisplayed" => $unitName === 'g' ? 1 : 0
                 ]);
-
-                ${formFactorCode}
-
-                $exists = DB::table('${T.APPLICABLE_FF}')
-                    ->where('productTypeID', $product->${C.ID})
-                    ->where('formFactorTypeID', $nptItem->${C.FF_TYPE_ID})
-                    ->exists();
-
-                if (!$exists) {
-                    DB::table('${T.APPLICABLE_FF}')->insert([
-                        "productTypeID" => $product->${C.ID},
-                        "formFactorTypeID" => $nptItem->${C.FF_TYPE_ID}
-                    ]);
-                }
 
                 NutritionProductTypeHistory::create([
                     'fthistBarcode'            => $barcode,
@@ -184,9 +172,32 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                     'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
                     'fthistDisplacement'       => $product->${C.DISPLACEMENT},
                 ]);
+            }
 
+            // 3. Always check if this specific Item Number exists under this product
+            $itemExists = NutritionProductTypeItem::where('${C.ID}', $product->${C.ID})
+                ->where('${C.ITEM_CODE}', $barcode)
+                ->exists();
+
+            if (!$itemExists) {
+                // 4. Attach the new Hierarchy & Item records
+                ${formFactorCode}
+
+                $exists = DB::table('${T.APPLICABLE_FF}')
+                    ->where('productTypeID', $product->${C.ID})
+                    ->where('formFactorTypeID', $nptItem->${C.FF_TYPE_ID})
+                    ->exists();
+
+                if (!$exists) {
+                    DB::table('${T.APPLICABLE_FF}')->insert([
+                        "productTypeID" => $product->${C.ID},
+                        "formFactorTypeID" => $nptItem->${C.FF_TYPE_ID}
+                    ]);
+                }
+                
+                $this->command->info("-> Attached item $barcode to product $productName.");
             } else {
-                $this->command->warn("-> Skipped: $productName already exists.");
+                $this->command->warn("-> Skipped: Item $barcode already exists for $productName.");
             }`;
         }).join('\n\n');
     } else if (action === 'barcode-update') {
