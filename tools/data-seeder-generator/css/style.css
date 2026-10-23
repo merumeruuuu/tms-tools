@@ -98,7 +98,7 @@ body {
 
 .panel-layout {
     display: grid;
-    grid-template-columns: 450px 1fr;
+    grid-template-columns: 520px 1fr; /* Widened from 450px so the side-by-side has room */
     gap: 20px;
     flex: 1;
     overflow: hidden;
@@ -436,6 +436,7 @@ select.preview-input {
     flex-direction: column;
     width: 100%;
 }
+
 .update-selector-panel {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -443,6 +444,7 @@ select.preview-input {
     padding: 12px;
     margin-bottom: 15px;
 }
+
 .update-selector-panel .field-selection-hint {
     color: #475569;
     font-size: 12px;
@@ -450,16 +452,14 @@ select.preview-input {
     font-style: italic;
 }
 
-/* Force checkboxes to flow horizontally like a paragraph */
 .field-checkbox-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 16px; /* 8px vertical gap, 16px horizontal gap between items */
+    gap: 8px 16px;
     max-height: none;
     overflow: visible;
 }
 
-/* Override existing field-checkbox-row styles to look like plain text */
 .field-checkbox-row {
     display: flex !important;
     align-items: center;
@@ -487,13 +487,258 @@ select.preview-input {
     accent-color: #2563eb;
 }
 
-/* Ensure the editor fields stack cleanly below */
 .update-editor-panel {
     display: flex;
     flex-direction: column;
     gap: 12px;
     padding-top: 10px;
     border-top: 1px dashed #cbd5e1;
+}
+
+.update-editor-panel .conditional-field {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0;
+}
+
+.update-editor-panel .conditional-field input,
+.update-editor-panel .conditional-field select {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+.update-button-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+    gap: 2px 18px;
+}
+
+#step-2 .product-form-group .update-toggle-btn {
+    display: inline-flex !important;
+    align-items: center;
+    width: auto;
+    min-height: 18px;
+    text-align: left;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    color: #475569;
+    text-transform: none;
+    transition: color 0.15s ease;
+    user-select: none;
+    line-height: 1.2;
+}
+
+#step-2 .product-form-group .update-toggle-btn .field-checkbox {
+    display: block !important;
+    flex: 0 0 14px;
+    width: 14px !important;
+    height: 14px !important;
+    accent-color: #2563eb;
+}
+
+#step-2 .product-form-group .update-toggle-btn .btn-text {
+    min-width: 0;
+}
+
+#step-2 .product-form-group .update-toggle-btn:hover {
+    color: #1d4ed8;
+}
+
+#step-2 .product-form-group .update-toggle-btn.selected {
+    color: #174ea6;
+    font-weight: 600;
+}
+
+#productFormFields .update-module-container {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+}
+
+#productFormFields .update-selector-panel {
+    background: #f8fafc;
+    border-color: #dbe3ee;
+    border-radius: 8px;
+    margin-bottom: 0;
+}
+
+#productFormFields .update-selector-panel .field-selection-hint {
+    color: #64748b;
+    font-style: normal;
+    line-height: 1.45;
+}
+
+#productFormFields .update-editor-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    padding-top: 14px;
+}
+
+#productFormFields .update-editor-panel .conditional-field {
+    padding: 12px;
+    border-color: #dbe3ee;
+    border-radius: 8px;
+}
+
+#productFormFields .manufacturer-other-field {
+    margin-top: 8px;
+}
+
+#step-2 .panel-layout {
+    grid-template-columns: minmax(390px, 0.9fr) minmax(0, 1.45fr);
+    gap: 18px;
+}
+
+#step-2 .panel {
+    min-width: 0;
+    border-radius: 8px;
+}
+
+#step-2 .panel-header {
+    padding: 14px 18px;
+    background: #f8fafc;
+}
+
+#step-2 .panel-body {
+    padding: 18px;
+}
+
+#step-2 .form-tab-btn {
+    flex: 1;
+    padding: 10px 12px;
+}
+
+#step-2 .form-tab-btn:hover:not(.active) {
+    color: #334155;
+    background: #f8fafc;
+}
+
+#step-2 .product-form-group label {
+    margin-bottom: 7px;
+    color: #475569;
+    font-size: 11px;
+}
+
+#step-2 .input-field,
+#step-2 .product-form-group input,
+#step-2 .product-form-group select {
+    min-height: 40px;
+    border-color: #cbd5e1;
+    border-radius: 6px;
+}
+
+#step-2 #productFormFields .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+
+#step-2 #productFormFields .form-section-title {
+    margin-top: 8px;
+}
+
+#step-2 .products-preview-table {
+    min-width: 560px;
+}
+
+#step-2 .panel-body:has(.products-preview-table) {
+    overflow: auto;
+}
+
+#step-2 .products-preview-table th {
+    padding: 13px 16px;
+    background: #f8fafc;
+    border-bottom-width: 1px;
+}
+
+#step-2 .products-preview-table td {
+    padding: 14px 16px;
+}
+
+#step-2 .products-preview-table .empty-state td {
+    padding: 64px 20px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+#step-2 .product-count {
+    min-width: 22px;
+    min-height: 22px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@media (max-width: 1050px) {
+    #step-2 .panel-layout {
+        grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.2fr);
+    }
+
+}
+
+@media (max-width: 760px) {
+    body {
+        height: auto;
+        min-height: 100vh;
+        overflow: auto;
+        align-items: stretch;
+    }
+
+    .seeder-wrapper {
+        width: 100%;
+        min-height: 100vh;
+        height: auto;
+        border-radius: 0;
+    }
+
+    .container {
+        min-height: 0;
+        overflow: visible;
+        padding: 16px;
+    }
+
+    #step-2 .step-content.active {
+        overflow: visible;
+    }
+
+    #step-2 .panel-layout {
+        grid-template-columns: minmax(0, 1fr);
+        overflow: visible;
+    }
+
+    #step-2 .panel {
+        min-height: 260px;
+    }
+
+    #step-2 .panel-body {
+        overflow: auto;
+    }
+
+    .update-module-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #step-2 #productFormFields .form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #step-2 #productFormFields .full-width,
+    #step-2 #productFormFields .form-section-title {
+        grid-column: 1;
+    }
+
+    .navigation-buttons {
+        padding: 16px 0 4px;
+    }
 }
 /* --- Professional Steps Indicator --- */
 .steps-indicator {

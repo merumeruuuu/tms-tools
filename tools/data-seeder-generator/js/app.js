@@ -4,46 +4,42 @@
  */
 
 const UPDATE_FIELD_DEFINITIONS = [
-    { value: 'manufacturer', label: 'Manufacturer', type: 'text', placeholder: 'e.g., Abbott Nutrition' },
-    { value: 'shortName', label: 'Short Name', type: 'text', placeholder: 'e.g., Similac' },
-    { value: 'hl7Reference', label: 'HL7 Reference', type: 'text', placeholder: 'e.g., MLT-17' },
-    { value: 'hl7Fortifier', label: 'Fortifier HL7 Ref', type: 'text', placeholder: 'e.g., FORT-09' },
-    { value: 'productType', label: 'Product Type', type: 'select', placeholder: 'Select product type', options: [
-        { value: '3', label: 'Powder' },
-        { value: '2', label: 'Liquid Concentrate' },
-        { value: '1', label: 'Ready-to-Feed Liquid' }
+    { value: 'manufacturer', label: 'Manufacturer', type: 'select', placeholder: 'Select a manufacturer...', icon: '🏢', theme: 'blue', options: [
+        { value: 'Abbott Nutrition', label: 'Abbott Nutrition' },
+        { value: 'Mead Johnson Nutrition', label: 'Mead Johnson Nutrition' },
+        { value: 'Nestle Health Science', label: 'Nestle Health Science' },
+        { value: 'Nutricia', label: 'Nutricia' },
+        { value: 'Reckitt', label: 'Reckitt' },
+        { value: 'Danone', label: 'Danone' },
+        { value: 'Kate Farms', label: 'Kate Farms' },
+        { value: 'Fresenius Kabi', label: 'Fresenius Kabi' },
+        { value: 'Baxter', label: 'Baxter' },
+        { value: 'B. Braun', label: 'B. Braun' },
+        { value: '__other__', label: 'Other' }
     ]},
-    { value: 'productUse', label: 'Product Use', type: 'select', placeholder: 'Select product use', options: [
-        { value: 'base', label: 'Base Formula' },
-        { value: 'fortifier', label: 'Fortifier' },
-        { value: 'modular', label: 'Modular' }
+    { value: 'shortName', label: 'Short Name', type: 'text', placeholder: 'e.g., Similac', icon: '📝', theme: 'blue' },
+    { value: 'hl7Reference', label: 'HL7 Reference', type: 'text', placeholder: 'e.g., MLT-17', icon: '🔌', theme: 'purple' },
+    { value: 'hl7Fortifier', label: 'Fortifier HL7', type: 'text', placeholder: 'e.g., FORT-09', icon: '🔌', theme: 'purple' },
+    { value: 'productType', label: 'Product Type', type: 'select', icon: '✨', theme: 'green', options: [
+        { value: '3', label: 'Powder' }, { value: '2', label: 'Liquid Concentrate' }, { value: '1', label: 'Ready-to-Feed Liquid' }
     ]},
-    { value: 'categoryId', label: 'Category', type: 'select', placeholder: 'Select category', options: [
-        { value: '3', label: 'Formula (Default)' },
-        { value: '5', label: 'Additive / Fortifier' },
-        { value: '1', label: 'EBM' },
-        { value: '2', label: 'DHM' }
+    { value: 'productUse', label: 'Product Use', type: 'select', icon: '✨', theme: 'green', options: [
+        { value: 'base', label: 'Base Formula' }, { value: 'fortifier', label: 'Fortifier' }, { value: 'modular', label: 'Modular' }
     ]},
-    { value: 'caloricValue', label: 'Caloric Density', type: 'number', step: 0.1, numeric: true, placeholder: 'e.g., 22' },
-    { value: 'displacement', label: 'Displacement', type: 'number', step: 0.01, numeric: true, placeholder: 'e.g., 1.0' },
-    { value: 'expirationOpened', label: 'Expiration Once Opened (Hours)', type: 'number', numeric: true, placeholder: 'e.g., 48' },
-    { value: 'expirationPrepared', label: 'Expiration Once Prepared (Hours)', type: 'number', numeric: true, placeholder: 'e.g., 48' },
-    { value: 'containerType', label: 'Type of Container', type: 'select', placeholder: 'Select container', options: [
-        { value: '1', label: 'Bottle' },
-        { value: '2', label: 'Carton' },
-        { value: '3', label: 'Can' },
-        { value: '4', label: 'Case' },
-        { value: '6', label: 'Packet' },
-        { value: '10', label: 'Tetra Pak' }
+    { value: 'categoryId', label: 'Category', type: 'select', icon: '✨', theme: 'green', options: [
+        { value: '3', label: 'Formula' }, { value: '5', label: 'Additive' }, { value: '1', label: 'EBM' }, { value: '2', label: 'DHM' }
     ]},
-    { value: 'unitQuantity', label: 'Number of Containers', type: 'number', numeric: true, placeholder: 'e.g., 1' },
-    { value: 'measurementVolume', label: 'Unit Volume', type: 'number', step: 0.1, numeric: true, placeholder: 'e.g., 100' },
-    { value: 'measurementUnit', label: 'Measurement Unit', type: 'select', placeholder: 'Select unit', options: [
-        { value: 'ml', label: 'mL' },
-        { value: 'g', label: 'g' },
-        { value: 'oz', label: 'oz' }
+    { value: 'caloricValue', label: 'Caloric Density', type: 'number', step: 0.1, numeric: true, icon: '⚡', theme: 'orange' },
+    { value: 'displacement', label: 'Displacement', type: 'number', step: 0.01, numeric: true, icon: '💧', theme: 'orange' },
+    { value: 'expirationOpened', label: 'Exp. Opened (Hrs)', type: 'number', numeric: true, icon: '⏳', theme: 'red' },
+    { value: 'expirationPrepared', label: 'Exp. Prepared (Hrs)', type: 'number', numeric: true, icon: '⏳', theme: 'red' },
+    { value: 'measurementVolume', label: 'Unit Volume', type: 'number', step: 0.1, numeric: true, icon: '📏', theme: 'teal' },
+    { value: 'measurementUnit', label: 'Measurement Unit', type: 'select', icon: '⚖️', theme: 'teal', options: [
+        { value: 'ml', label: 'mL' }, { value: 'g', label: 'g' }, { value: 'oz', label: 'oz' }
     ]}
 ];
+
+const WORKFLOW_STORAGE_KEY = 'dataSeederWorkflow';
 
 class DataSeederApp {
     constructor() {
@@ -62,6 +58,130 @@ class DataSeederApp {
         this.setupEventListeners();
         this.loadFavorites();
         this.setupDragAndDrop(); // Call it from here
+        this.setupProgressPersistence();
+        this.restoreProgress();
+    }
+
+    setupProgressPersistence() {
+        const persist = () => this.saveProgress();
+        document.getElementById('step-1').addEventListener('input', persist);
+        document.getElementById('step-1').addEventListener('change', persist);
+        document.getElementById('step-2').addEventListener('input', persist);
+        document.getElementById('step-2').addEventListener('change', persist);
+        document.getElementById('step-3').addEventListener('change', persist);
+    }
+
+    saveProgress() {
+        const formValues = {};
+        document.querySelectorAll('#productFormFields input[data-field-name], #productFormFields select[data-field-name], #productFormFields textarea[data-field-name]').forEach(control => {
+            formValues[control.dataset.fieldName] = control.type === 'checkbox' ? control.checked : control.value;
+        });
+
+        const hierarchy = Array.from(document.querySelectorAll('#productFormFields .hierarchy-row')).map(row => ({
+            type: row.querySelector('.hierarchy-type')?.value || '',
+            barcode: row.querySelector('.hierarchy-bc')?.value || '',
+            quantity: row.querySelector('.hierarchy-qty')?.value || '',
+            volume: row.querySelector('.hierarchy-vol')?.value || ''
+        }));
+
+        const progress = {
+            currentStep: this.currentStep,
+            buildInfo: this.buildInfo,
+            localUrl: document.getElementById('localUrl').value,
+            seederNumber: document.getElementById('nextSeederNum').value,
+            products: this.products,
+            currentAction: this.currentAction,
+            generatedSeeder: this.generatedSeeder,
+            actionType: document.getElementById('actionType').value,
+            activeTab: document.querySelector('.form-tab-btn.active')?.dataset.tab || 'manual',
+            formValues,
+            updateFields: Array.from(document.querySelectorAll('#productFormFields .field-checkbox:checked'))
+                .map(checkbox => checkbox.dataset.fieldValue),
+            hierarchy,
+            outputMethod: document.querySelector('input[name="output"]:checked')?.value || 'download'
+        };
+
+        try {
+            sessionStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(progress));
+        } catch (error) {
+            console.warn('Could not save workflow progress:', error);
+        }
+    }
+
+    restoreProgress() {
+        let progress;
+        try {
+            progress = JSON.parse(sessionStorage.getItem(WORKFLOW_STORAGE_KEY) || 'null');
+        } catch (error) {
+            console.warn('Could not restore workflow progress:', error);
+            return;
+        }
+        if (!progress) return;
+
+        this.buildInfo = progress.buildInfo || null;
+        this.products = Array.isArray(progress.products) ? progress.products : [];
+        this.currentAction = progress.currentAction || null;
+        this.generatedSeeder = progress.generatedSeeder || null;
+        this.seederNumber = progress.seederNumber ? Number(progress.seederNumber) : null;
+
+        document.getElementById('localUrl').value = progress.localUrl || '';
+        if (this.buildInfo) {
+            document.getElementById('clientName').textContent = this.buildInfo.clientName || '';
+            document.getElementById('buildVersion').textContent = this.buildInfo.version || '';
+            document.getElementById('buildQuarter').textContent = this.buildInfo.quarter || '';
+            document.getElementById('buildPath').textContent = this.buildInfo.buildPath || '';
+            document.getElementById('buildDetailsCard').style.display = 'flex';
+            this.loadFavorites(this.buildInfo.buildPath);
+            this.ensureSeedersFolder();
+        }
+        this.updateSeederNumberDisplay(progress.seederNumber || '', progress.seederNumber ? 'saved' : 'action required');
+
+        const actionType = progress.actionType || '';
+        document.getElementById('actionType').value = actionType;
+        if (actionType) {
+            this.loadProductForm(actionType);
+            const updateGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
+            if (updateGroup && Array.isArray(progress.updateFields)) {
+                updateGroup.querySelectorAll('.field-checkbox').forEach(checkbox => {
+                    checkbox.checked = progress.updateFields.includes(checkbox.dataset.fieldValue);
+                });
+                this.syncConditionalFieldVisibility();
+            }
+
+            Object.entries(progress.formValues || {}).forEach(([name, value]) => {
+                const control = document.querySelector(`#productFormFields input[data-field-name="${name}"], #productFormFields select[data-field-name="${name}"], #productFormFields textarea[data-field-name="${name}"]`);
+                if (!control || control.type === 'checkbox') return;
+                control.value = value;
+                if (name === 'manufacturer') control.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            const hierarchyList = document.querySelector('#productFormFields .hierarchy-list');
+            if (hierarchyList && Array.isArray(progress.hierarchy) && progress.hierarchy.length) {
+                hierarchyList.innerHTML = '';
+                progress.hierarchy.forEach((item, index) => {
+                    this.addHierarchyRow(hierarchyList, index === 0);
+                    const row = hierarchyList.lastElementChild;
+                    row.querySelector('.hierarchy-type').value = item.type;
+                    row.querySelector('.hierarchy-bc').value = item.barcode;
+                    row.querySelector('.hierarchy-qty').value = item.quantity;
+                    row.querySelector('.hierarchy-vol').value = item.volume;
+                });
+            }
+        }
+
+        this.switchFormTab(progress.activeTab || 'manual');
+        this.renderProductsTable();
+        if (this.generatedSeeder) document.getElementById('seederPreview').textContent = this.generatedSeeder;
+        const outputRadio = document.querySelector(`input[name="output"][value="${progress.outputMethod || 'download'}"]`);
+        if (outputRadio) outputRadio.checked = true;
+
+        const requestedStep = Number(progress.currentStep) || 1;
+        this.currentStep = requestedStep === 3 && !this.generatedSeeder ? 2 : requestedStep;
+        if (this.currentStep > 1 && !this.buildInfo) this.currentStep = 1;
+        if (progress.outputMethod === 'auto-write') document.getElementById('outputDownload').checked = true;
+        this.updateStepIndicator();
+        this.showStep(this.currentStep);
+        this.saveProgress();
     }
 
     // Define it OUTSIDE of init(), as its own class method
@@ -144,7 +264,7 @@ class DataSeederApp {
             'containerType', 'unitQuantity', 'measurementVolume', 'measurementUnit'
         ];
 
-        orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume'].includes(k));
+        orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume', 'barcode'].includes(k));
 
         const detailsContainer = document.getElementById('previewDetails');
         let html = '';
@@ -470,7 +590,9 @@ class DataSeederApp {
 
             const getVal = (key) => {
                 let val = extractedData[key.toLowerCase()] || '';
-                return val.toLowerCase() === 'na' ? '' : val;
+                let cleanVal = val.trim().toLowerCase();
+                // Strip out common "not applicable" strings so the field stays blank
+                return (cleanVal === 'na' || cleanVal === 'n/a' || cleanVal === 'none' || cleanVal === 'null') ? '' : val.trim();
             };
 
             const rawName = getVal('Display Name');
@@ -633,6 +755,7 @@ class DataSeederApp {
             this.currentAction = 'create';
             this.products.push(product);
             this.renderProductsTable();
+            this.saveProgress();
             
             this.showStatus(`Extracted ${rawName} from document!`, 'success');
 
@@ -841,8 +964,7 @@ async ensureSeedersFolder() {
             selectorPanel.appendChild(helperText);
 
             const editorPanel = document.createElement('div');
-            // Reuses the form-grid class so the input fields nicely align in 2 columns
-            editorPanel.className = 'update-editor-panel form-grid'; 
+            editorPanel.className = 'update-editor-panel';
 
             fields.forEach(field => {
                 if (field.name === 'productName') {
@@ -850,9 +972,7 @@ async ensureSeedersFolder() {
                     gridWrapper.appendChild(this.createFormField(field));
                 } else if (field.type === 'checkbox-group') {
                     selectorPanel.appendChild(this.createFormField(field));
-                } else if (field.type === 'conditional-input') {
-                    editorPanel.appendChild(this.createFormField(field));
-                } else {
+                } else if (field.type !== 'conditional-input') {
                     gridWrapper.appendChild(this.createFormField(field));
                 }
             });
@@ -941,7 +1061,7 @@ async ensureSeedersFolder() {
                     numeric: field.numeric,
                     placeholder: field.placeholder,
                     options: field.options,
-                    value: field.type === 'select' ? (field.options?.[0]?.value || '') : ''
+                    value: field.name === 'manufacturer' ? '' : (field.type === 'select' ? (field.options?.[0]?.value || '') : '')
                 }))
             ],
             'barcode-update': [
@@ -1054,14 +1174,14 @@ async ensureSeedersFolder() {
 
         if (field.type === 'checkbox-group') {
             const checkboxWrap = document.createElement('div');
-            checkboxWrap.className = 'field-checkbox-group';
+            checkboxWrap.className = 'update-button-group';
             checkboxWrap.dataset.fieldName = field.name;
 
             const selectedValues = Array.isArray(field.value) ? field.value : [];
             
             field.options.forEach(opt => {
                 const row = document.createElement('label');
-                row.className = 'field-checkbox-row checkbox-pill';
+                row.className = 'update-toggle-btn'; // No more theme classes
                 
                 const isChecked = selectedValues.includes(opt.value);
                 if (isChecked) row.classList.add('selected');
@@ -1072,17 +1192,17 @@ async ensureSeedersFolder() {
                 checkbox.dataset.fieldValue = opt.value;
                 checkbox.checked = isChecked;
 
-                // Sync the blue pill styling when toggled
                 checkbox.addEventListener('change', (e) => {
                     if(e.target.checked) row.classList.add('selected');
                     else row.classList.remove('selected');
                 });
 
-                const text = document.createElement('span');
-                text.textContent = opt.label;
+                const textSpan = document.createElement('span');
+                textSpan.className = 'btn-text';
+                textSpan.textContent = opt.label;
 
                 row.appendChild(checkbox);
-                row.appendChild(text);
+                row.appendChild(textSpan);
                 checkboxWrap.appendChild(row);
             });
 
@@ -1105,6 +1225,14 @@ async ensureSeedersFolder() {
                 const select = document.createElement('select');
                 select.dataset.fieldName = field.name;
                 if (field.required) select.required = true;
+                if (field.placeholder) {
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = field.placeholder;
+                    placeholder.disabled = true;
+                    placeholder.selected = true;
+                    select.appendChild(placeholder);
+                }
                 field.options.forEach(opt => {
                     const option = document.createElement('option');
                     option.value = opt.value;
@@ -1113,6 +1241,24 @@ async ensureSeedersFolder() {
                     select.appendChild(option);
                 });
                 wrapper.appendChild(select);
+
+                if (field.name === 'manufacturer') {
+                    const otherGroup = document.createElement('div');
+                    otherGroup.className = 'manufacturer-other-field hidden';
+
+                    const otherInput = document.createElement('input');
+                    otherInput.type = 'text';
+                    otherInput.dataset.fieldName = 'manufacturerOther';
+                    otherInput.placeholder = 'Enter manufacturer name';
+                    otherInput.autocomplete = 'organization';
+                    otherGroup.appendChild(otherInput);
+                    wrapper.appendChild(otherGroup);
+
+                    select.addEventListener('change', () => {
+                        otherGroup.classList.toggle('hidden', select.value !== '__other__');
+                        if (select.value !== '__other__') otherInput.value = '';
+                    });
+                }
             } else {
                 const input = document.createElement('input');
                 input.type = field.subtype || 'text';
@@ -1184,6 +1330,7 @@ async ensureSeedersFolder() {
         this.products.push({ action: actionType, ...product });
         this.renderProductsTable();
         this.resetForm();
+        this.saveProgress();
         this.showStatus('Product added!', 'success');
     }
 
@@ -1194,18 +1341,23 @@ async ensureSeedersFolder() {
         const checkedValues = Array.from(checkboxGroup.querySelectorAll('.field-checkbox:checked'))
             .map(el => el.dataset.fieldValue)
             .filter(Boolean);
+        const editorPanel = document.querySelector('#productFormFields .update-editor-panel');
+        if (!editorPanel) return;
 
-        document.querySelectorAll('#productFormFields .conditional-field').forEach(field => {
-            const dependsValue = field.dataset.dependsValue;
-            const isVisible = checkedValues.includes(dependsValue);
-            field.classList.toggle('hidden', !isVisible);
+        const selectedFields = this.getFormFields('update')
+            .filter(field => field.type === 'conditional-input' && checkedValues.includes(field.dependsValue));
+        const selectedNames = new Set(selectedFields.map(field => field.name));
 
-            const input = field.querySelector('input, select');
-            if (input) {
-                input.disabled = !isVisible;
-                if (!isVisible) {
-                    input.value = input.tagName === 'SELECT' ? (input.options[0]?.value || '') : '';
-                }
+        editorPanel.querySelectorAll('.conditional-field').forEach(element => {
+            if (!selectedNames.has(element.dataset.fieldName)) element.remove();
+        });
+
+        selectedFields.forEach(field => {
+            const exists = editorPanel.querySelector(`.conditional-field[data-field-name="${field.name}"]`);
+            if (!exists) {
+                const element = this.createFormField(field);
+                element.classList.remove('hidden');
+                editorPanel.appendChild(element);
             }
         });
     }
@@ -1250,9 +1402,17 @@ async ensureSeedersFolder() {
                 return;
             }
 
-            const el = document.querySelector(`#productFormFields [data-field-name="${field.name}"] input, #productFormFields [data-field-name="${field.name}"] select`);
+            const fieldElement = document.querySelector(`#productFormFields [data-field-name="${field.name}"]`);
+            const el = fieldElement && /^(INPUT|SELECT)$/.test(fieldElement.tagName)
+                ? fieldElement
+                : fieldElement?.querySelector('input, select');
             const raw = el ? el.value : '';
-            data[field.name] = field.numeric ? (parseFloat(raw) || 0) : raw;
+            if (field.name === 'manufacturer' && raw === '__other__') {
+                const otherInput = fieldElement?.querySelector('[data-field-name="manufacturerOther"]');
+                data[field.name] = otherInput ? otherInput.value.trim() : '';
+            } else {
+                data[field.name] = field.numeric ? (parseFloat(raw) || 0) : raw;
+            }
         });
 
         if (!data.productName) {
@@ -1262,6 +1422,11 @@ async ensureSeedersFolder() {
 
         if (actionType === 'update' && (!Array.isArray(data.updateFields) || data.updateFields.length === 0)) {
             this.showStatus('Select at least one field to update.', 'error');
+            return null;
+        }
+
+        if (actionType === 'update' && data.updateFields.includes('manufacturer') && !data.manufacturer) {
+            this.showStatus('Select a manufacturer or enter a name for Other.', 'error');
             return null;
         }
 
@@ -1355,6 +1520,7 @@ async ensureSeedersFolder() {
     removeProduct(index) {
         this.products.splice(index, 1);
         this.renderProductsTable();
+        this.saveProgress();
         this.showStatus('Product removed', 'success');
     }
 
@@ -1362,6 +1528,7 @@ async ensureSeedersFolder() {
         if (confirm('Clear all products?')) {
             this.products = [];
             this.renderProductsTable();
+            this.saveProgress();
             this.showStatus('All products cleared', 'success');
         }
     }
@@ -1370,6 +1537,7 @@ async ensureSeedersFolder() {
         document.querySelectorAll('.form-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabName));
         document.querySelectorAll('.form-tab-content').forEach(content => content.classList.remove('active'));
         document.getElementById(`${tabName}-tab`).classList.add('active');
+        this.saveProgress();
     }
 
     async handleCsvUpload(event) {
@@ -1387,6 +1555,7 @@ async ensureSeedersFolder() {
 
             this.products = csvProducts;
             this.renderProductsTable();
+            this.saveProgress();
             this.showStatus(`${csvProducts.length} products loaded`, 'success');
         } catch (error) {
             this.showStatus(`CSV Error: ${error.message}`, 'error');
@@ -1465,6 +1634,7 @@ async ensureSeedersFolder() {
             // Automatically advance the counter for the next product!
             this.seederNumber++;
             this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
+            this.saveProgress();
             
             this.showSuccessModal('Seeder Written!', `${fileName} was written directly to the seeders folder.`);
         } catch (error) {
@@ -1484,6 +1654,7 @@ async ensureSeedersFolder() {
         
         this.seederNumber++;
         this.updateSeederNumberDisplay(this.seederNumber, this.seedersDirHandle ? 'verified' : 'saved');
+        this.saveProgress();
         this.showSuccessModal('Seeder Generated!', `${fileName} downloaded successfully.`);
     }
 
@@ -1491,6 +1662,7 @@ async ensureSeedersFolder() {
         navigator.clipboard.writeText(this.generatedSeeder).then(() => {
             this.seederNumber++;
             this.updateSeederNumberDisplay(this.seederNumber, this.seedersDirHandle ? 'verified' : 'saved');
+            this.saveProgress();
             this.showSuccessModal('Copied!', 'Seeder code copied to clipboard.');
         }).catch(() => {
             this.showStatus('Copy failed', 'error');
@@ -1512,6 +1684,7 @@ async ensureSeedersFolder() {
         this.currentStep = step;
         this.updateStepIndicator();
         this.showStep(step);
+        this.saveProgress();
     }
 
     updateStepIndicator() {
@@ -1546,6 +1719,7 @@ async ensureSeedersFolder() {
 
         localStorage.setItem('seederFavorites', JSON.stringify(favorites));
         this.loadFavorites(favorite.buildPath);
+        this.saveProgress();
     }
 
     loadFavorites(selectedBuildPath) {
@@ -1600,6 +1774,7 @@ async ensureSeedersFolder() {
         this.currentStep = 1;
         this.products = [];
         this.generatedSeeder = null;
+        sessionStorage.removeItem(WORKFLOW_STORAGE_KEY);
         this.loadFavorites();
         this.updateStepIndicator();
         this.showStep(1);
