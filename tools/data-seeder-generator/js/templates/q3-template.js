@@ -264,6 +264,7 @@ ${updateData}
             if ($product) {
                 $updateData = $p['updates'];
 
+                // 2a. Dynamic Manufacturer Lookup if requested
                 if (isset($p['mfgSearch'])) {
                     $mfgId = DB::table('${T.MANUFACTURERS}')
                         ->where('ManufacturerName', 'like', '%' . $p['mfgSearch'] . '%')
@@ -272,9 +273,14 @@ ${updateData}
                     $updateData['${C.MFG_ID}'] = $mfgId;
                 }
 
+                // 2b. Execute the payload
                 if (!empty($updateData)) {
                     $product->update($updateData);
                     
+                    // Fetch the freshly updated model to grab accurate history values
+                    $product = $product->fresh();
+                    
+                    // 2c. Update special context tables if Measurement Unit changed
                     if (isset($p['unitName'])) {
                         $unitName = $p['unitName'];
                         $unitId = DB::table('nutrition_product_measurement_units')->where('singularName', 'like', $unitName . '%')->value('id') ?? ($unitName === 'g' ? 2 : 1);
@@ -284,6 +290,23 @@ ${updateData}
                             'decimalPlacesDisplayed' => $unitName === 'g' ? 1 : 0
                         ]);
                     }
+
+                    // 2d. INSERT UPDATE HISTORY (Action 9001)
+                    NutritionProductTypeHistory::create([
+                        'fthistBarcode'            => $product->${C.BARCODE},
+                        'fthistFormulaID'          => $product->${C.ID},
+                        'fthistAction'             => 9001,
+                        'fthistDateTime'           => Carbon::now(),
+                        'fthistUser'               => 1,
+                        'fthistName'               => $product->${C.NAME},
+                        'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
+                        'fthistType'               => $product->${C.TYPE},
+                        'fthistCategoryID'         => $product->${C.CATEGORY},
+                        'fthistMeasurementUnit'    => $product->${C.UOM},
+                        'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
+                        'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
+                        'fthistDisplacement'       => $product->${C.DISPLACEMENT},
+                    ]);
 
                     $this->command->info("-> Updated product: " . $p['productName']);
                 } else {
