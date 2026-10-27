@@ -5,12 +5,6 @@
 
 class WampDetector {
     constructor() {
-        this.wampPaths = [
-            'C:\\wamp',
-            'C:\\wamp64',
-            'D:\\wamp',
-            'D:\\wamp64',
-        ];
     }
 
     /**
@@ -124,17 +118,8 @@ class WampDetector {
      * Construct build path based on WAMP installation
      */
     async constructBuildPath(urlInfo) {
-        // This is a simulated detection
-        // Real implementation would:
-        // 1. Check registry for WAMP paths
-        // 2. Scan www directory
-        // 3. Match with vhost config
-
-        const wampBase = 'D:\\wamp\\www\\local'; // Default WAMP path
-        const versionPath = `version7-${urlInfo.quarter.toLowerCase()}`;
-        const buildPath = `${wampBase}\\${versionPath}\\${urlInfo.clientName}-${urlInfo.version}`;
-
-        return buildPath;
+        // The browser cannot infer an absolute path; the folder picker resolves it.
+        return `${urlInfo.clientName}-${urlInfo.version}`;
     }
 
     /**

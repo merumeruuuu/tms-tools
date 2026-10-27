@@ -89,37 +89,69 @@ class FsAccessManager {
     async getSeedersDirHandle(buildInfo, rootHandle) {
         if (!rootHandle) return null;
 
-        const versionFolder = `version7-${buildInfo.quarter.toLowerCase()}`;
         const buildFolder = `${buildInfo.clientName}-${buildInfo.version}`;
         const tail = ['vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'];
-        
-        // Smart Path Tracer: It doesn't matter which folder the user selected, it will find the seeders
-        const path1 = [versionFolder, buildFolder, ...tail]; // User selected "local"
-        const path2 = [buildFolder, ...tail];                // User selected "version7-qX"
-        const path3 = [...tail];                             // User selected project folder directly
 
-        const tryPath = async (segments) => {
-            let currentDir = rootHandle;
+        const tryPath = async (startHandle, segments) => {
+            let currentDir = startHandle;
             for (const segment of segments) {
                 try {
                     currentDir = await currentDir.getDirectoryHandle(segment, { create: false });
                 } catch (error) {
-                    return null; // Stop if path breaks
+                    return null;
                 }
             }
             return currentDir;
+        };
+
+        const normalizedBuildName = buildFolder.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normalizedClient = buildInfo.clientName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normalizedVersion = buildInfo.version.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const ignoredFolders = new Set(['.git', 'node_modules', 'storage', 'cache', 'logs']);
+        const queue = [{ handle: rootHandle, segments: [], depth: 0 }];
+        const candidates = [];
+        let visited = 0;
+        const maxDepth = 10;
+        const maxDirectories = 5000;
+
+        while (queue.length && visited < maxDirectories) {
+            const current = queue.shift();
+            visited += 1;
+
+            const seedersHandle = await tryPath(current.handle, tail);
+            if (seedersHandle) {
+                const directoryName = current.segments[current.segments.length - 1] || rootHandle.name;
+                const normalizedName = directoryName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const matchesBuild = normalizedName === normalizedBuildName ||
+                    (normalizedName.includes(normalizedClient) && normalizedName.includes(normalizedVersion));
+                candidates.push({
+                    handle: seedersHandle,
+                    relativePath: current.segments.length ? current.segments.join('\\') : rootHandle.name,
+                    matchesBuild
+                });
+                continue;
+            }
+
+            if (current.depth >= maxDepth) continue;
+            for await (const [name, entry] of current.handle.entries()) {
+                if (entry.kind !== 'directory' || ignoredFolders.has(name.toLowerCase())) continue;
+                if (name.toLowerCase() === 'vendor') continue;
+                queue.push({
+                    handle: entry,
+                    segments: [...current.segments, name],
+                    depth: current.depth + 1
+                });
+            }
         }
 
-        let dirHandle = await tryPath(path1);
-        if (dirHandle) return dirHandle;
+        const matchingCandidates = candidates.filter(candidate => candidate.matchesBuild);
+        const selected = matchingCandidates.length === 1
+            ? matchingCandidates[0]
+            : matchingCandidates.length > 1
+                ? null
+                : candidates.length === 1 ? candidates[0] : null;
 
-        dirHandle = await tryPath(path2);
-        if (dirHandle) return dirHandle;
-
-        dirHandle = await tryPath(path3);
-        if (dirHandle) return dirHandle;
-
-        return null; // Could not trace path
+        return selected ? { handle: selected.handle, relativePath: selected.relativePath } : null;
     }
 
     async getHighestSeederNumber(dirHandle) {

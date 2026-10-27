@@ -899,13 +899,12 @@ class DataSeederApp {
                 this.showStatus('Select your master project folder...', 'info');
                 const newRootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
                 
-                // 2. Overwrite the IndexedDB save via your fsAccessManager
-                if (typeof idbKeyval !== 'undefined') {
-                    await idbKeyval.set('wampDirectoryHandle', newRootHandle);
-                }
+                // Persist under the same key used by build detection.
+                await fsAccessManager.setStoredHandle(fsAccessManager.rootKey, newRootHandle);
                 
                 // 3. Re-run the folder detection to verify the new path
                 await this.ensureSeedersFolder();
+                this.rememberBuild();
                 this.showStatus(`Folder updated to: ${newRootHandle.name}`, 'success');
                 
             } catch (error) {
@@ -1193,16 +1192,20 @@ async ensureSeedersFolder() {
             }
 
             // Trace path to seeders
-            const dirHandle = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle);
+            const folderResult = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle);
 
-            if (!dirHandle) {
-                throw new Error("Could not trace the path to ClientDataUpdates. You might have selected the wrong folder.");
+            if (!folderResult) {
+                throw new Error('Could not find one matching project folder. Select a folder containing the local builds.');
             }
 
-            this.seedersDirHandle = dirHandle;
+            this.seedersDirHandle = folderResult.handle;
+            this.buildInfo.buildPath = folderResult.relativePath === rootHandle.name
+                ? rootHandle.name
+                : `${rootHandle.name}\\${folderResult.relativePath}`;
+            document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
             
             // Count the files!
-            const highest = await fsAccessManager.getHighestSeederNumber(dirHandle);
+            const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
             this.seederNumber = highest + 1;
             
             this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
