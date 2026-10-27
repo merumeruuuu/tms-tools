@@ -766,8 +766,270 @@ class DataSeederApp {
             this.showStatus('Mapping failed.', 'error');
         }
     }
-
+    updateApiSelectionCount() {
+        const checked = document.querySelectorAll('.api-product-cb:checked').length;
+        document.getElementById('apiSelectedCount').textContent = `${checked} product(s) selected`;
+        document.getElementById('stageSelectedApiBtn').disabled = checked === 0;
+    }
     setupEventListeners() {
+        // --- LIVE CATALOG SEARCH LOGIC ---
+        document.getElementById('apiSearchBtn').addEventListener('click', async () => {
+            const searchInput = document.getElementById('apiSearchInput').value.toLowerCase().trim();
+            const btn = document.getElementById('apiSearchBtn');
+            const tbody = document.getElementById('apiResultsBody');
+        // --- REAL-TIME TYPING SEARCH LOGIC ---
+        document.getElementById('apiSearchInput').addEventListener('input', () => {
+            // Only perform real-time search if the catalog has already been fetched
+            if (!apiService.cachedProducts || apiService.cachedProducts.length === 0) return;
+            
+            const searchInput = document.getElementById('apiSearchInput').value.toLowerCase().trim();
+            const tbody = document.getElementById('apiResultsBody');
+            
+            // Filter the locally cached data
+            const filtered = apiService.cachedProducts.filter(p => {
+                if (!searchInput) return true;
+                return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
+                       (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
+                       (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
+            }).slice(0, 50); // Cap at 50 results to keep the UI fast
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#94a3b8;">No matching products found.</td></tr>';
+                return;
+            }
+
+            // Render the updated table instantly
+            tbody.innerHTML = filtered.map(p => `
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="api-product-cb" value="${p.ItemID}" data-name="${p.FamilyName}">
+                    </td>
+                    <td>
+                        <strong style="color: #0f172a;">${p.FamilyName || 'Unnamed Product'}</strong><br>
+                        <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
+                    </td>
+                    <td style="font-size: 12px; color: #475569;">
+                        ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
+                        ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
+                    </td>
+                </tr>
+            `).join('');
+
+            // Re-attach listeners to the new checkboxes
+            document.querySelectorAll('.api-product-cb').forEach(cb => {
+                cb.addEventListener('change', () => this.updateApiSelectionCount());
+            });
+        });
+            // --- STAGE SELECTED PRODUCTS LOGIC ---
+        document.getElementById('stageSelectedApiBtn').addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('.api-product-cb:checked');
+            if (checkboxes.length === 0) return;
+
+            const btn = document.getElementById('stageSelectedApiBtn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.textContent = 'Staging...';
+                btn.disabled = true;
+
+                // 1. Gather the selected Item IDs
+                const itemIds = Array.from(checkboxes).map(cb => cb.value);
+                
+                // 2. Fetch the deep dive data from API 3
+                const detailedItems = await apiService.fetchProductDetails(itemIds);
+
+                // 3. The Translation Layer: Map API data to your Seeder format
+                detailedItems.forEach(apiItem => {
+                    // Find the matching basic product data from our API 2 cache
+                    const basicData = apiService.cachedProducts.find(p => p.ItemID.toString() === apiItem.ItemID.toString()) || {};
+                    
+                    // Extract Calories from the API 3 Nutrients array (Assuming Category/Description contains "Calorie")
+                    let calValue = 20; // Default fallback
+                    if (apiItem.Nutrients && Array.isArray(apiItem.Nutrients)) {
+                        const calObj = apiItem.Nutrients.find(n => (n.Description || '').toLowerCase().includes('calorie'));
+                        if (calObj && calObj.Value) calValue = parseFloat(calObj.Value) || calValue;
+                    }
+
+                    // Build Hierarchy Array from API 2 packaging data
+                    let hierarchy = [];
+                    if (basicData.PrimaryPackage) {
+                        // Map API string to your container IDs
+                        let cId = '1'; // Default Bottle
+                        const pkg = basicData.PrimaryPackage.toLowerCase();
+                        if (pkg.includes('carton')) cId = '2';
+                        else if (pkg.includes('can')) cId = '3';
+                        else if (pkg.includes('case')) cId = '4';
+                        else if (pkg.includes('packet')) cId = '6';
+
+                        hierarchy.push({
+                            containerId: cId,
+                            barcode: basicData.PrimaryBarcode || '',
+                            quantity: 1,
+                            volume: parseFloat(basicData.Displacement) || 0
+                        });
+                    }
+                    
+                    // Push to Pending Batch
+                    this.products.push({
+                        action: 'create', // Defaulting to create, user can switch to update in the UI if needed
+                        manufacturer: 'Undefined', // Adjust if API provides a manufacturer field
+                        productName: basicData.FamilyName || 'Imported Product',
+                        shortName: basicData.FamilyName || '',
+                        productCode: apiItem.ItemNumber || basicData.ItemNumber || '',
+                        barcode: basicData.PrimaryBarcode || '',
+                        productType: (basicData.FormType || '').toLowerCase().includes('powder') ? '3' : '1',
+                        productUse: 'base',
+                        categoryId: '3',
+                        caloricValue: calValue,
+                        displacement: parseFloat(basicData.Displacement) || 1.0,
+                        expirationOpened: 48,
+                        expirationPrepared: 48,
+                        measurementUnit: 'ml',
+                        hierarchy: hierarchy.length > 0 ? hierarchy : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }]
+                    });
+                });
+
+                // 4. Update the UI
+                this.renderProductsTable();
+                this.saveProgress();
+                this.showStatus(`Successfully staged ${detailedItems.length} products!`, 'success');
+                
+                // Clear checkboxes
+                checkboxes.forEach(cb => cb.checked = false);
+                this.updateApiSelectionCount();
+
+            } catch (error) {
+                this.showStatus(error.message, 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        });
+            if (!apiService.isConfigured()) {
+                this.showStatus('Please configure API settings first.', 'error');
+                document.getElementById('apiSettingsModal').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                btn.textContent = 'Loading...';
+                btn.disabled = true;
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:40px;">Fetching live catalog...</td></tr>';
+
+                // Fetch (or use cached) products from API 2
+                let products = apiService.cachedProducts;
+                if (!products || products.length === 0) {
+                    products = await apiService.fetchProducts();
+                }
+
+                // Filter the results locally for instant speed!
+                const filtered = products.filter(p => {
+                    if (!searchInput) return true;
+                    return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
+                           (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
+                           (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
+                }).slice(0, 50); // Cap at 50 to keep UI fast
+
+                if (filtered.length === 0) {
+                    tbody.innerHTML = '<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#94a3b8;">No matching products found.</td></tr>';
+                    return;
+                }
+
+                // Render the table
+                tbody.innerHTML = filtered.map(p => `
+                    <tr>
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="api-product-cb" value="${p.ItemID}" data-name="${p.FamilyName}">
+                        </td>
+                        <td>
+                            <strong style="color: #0f172a;">${p.FamilyName || 'Unnamed Product'}</strong><br>
+                            <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
+                        </td>
+                        <td style="font-size: 12px; color: #475569;">
+                            ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
+                            ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+
+                // Add listener to enable/disable the "Stage Selected" button
+                document.querySelectorAll('.api-product-cb').forEach(cb => {
+                    cb.addEventListener('change', () => this.updateApiSelectionCount());
+                });
+
+            } catch (error) {
+                this.showStatus(error.message, 'error');
+                tbody.innerHTML = `<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#ef4444;">${error.message}</td></tr>`;
+            } finally {
+                btn.textContent = 'Search';
+                btn.disabled = false;
+            }
+        });
+        // API Settings Modal Listeners
+        const apiModal = document.getElementById('apiSettingsModal');
+        
+        document.getElementById('openApiSettingsBtn').addEventListener('click', () => {
+            // Load current config into inputs
+            document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
+            document.getElementById('apiToken').value = apiService.config.token;
+            document.getElementById('facilitySelectionWrapper').classList.add('hidden');
+            apiModal.classList.remove('hidden');
+        });
+
+        document.querySelector('.close-api-btn').addEventListener('click', () => {
+            apiModal.classList.add('hidden');
+        });
+
+        // Test Connection & Fetch API 1
+        document.getElementById('testApiConnectionBtn').addEventListener('click', async () => {
+            const baseUrl = document.getElementById('apiBaseUrl').value.trim();
+            const token = document.getElementById('apiToken').value.trim();
+            const btn = document.getElementById('testApiConnectionBtn');
+            
+            if (!baseUrl || !token) {
+                this.showStatus('URL and Token are required', 'error');
+                return;
+            }
+
+            try {
+                btn.textContent = 'Connecting...';
+                btn.disabled = true;
+                
+                const facilities = await apiService.fetchFacilities(baseUrl, token);
+                
+                // Populate dropdown
+                const select = document.getElementById('apiFacilitySelect');
+                select.innerHTML = facilities.map(f => 
+                    `<option value="${f.FacilityID}">${f.FacilityName} (${f.EnterpriseName})</option>`
+                ).join('');
+                
+                // Auto-select previously saved facility if it exists
+                if (apiService.config.facilityId) {
+                    select.value = apiService.config.facilityId;
+                }
+
+                document.getElementById('facilitySelectionWrapper').classList.remove('hidden');
+                this.showStatus('Facilities loaded successfully!', 'success');
+            } catch (error) {
+                this.showStatus(error.message, 'error');
+            } finally {
+                btn.textContent = 'Test Connection & Fetch Facilities';
+                btn.disabled = false;
+            }
+        });
+
+        // Save Settings
+        document.getElementById('saveApiSettingsBtn').addEventListener('click', () => {
+            const select = document.getElementById('apiFacilitySelect');
+            apiService.saveConfig({
+                baseUrl: document.getElementById('apiBaseUrl').value.trim(),
+                token: document.getElementById('apiToken').value.trim(),
+                facilityId: select.value,
+                facilityName: select.options[select.selectedIndex].text
+            });
+            apiModal.classList.add('hidden');
+            this.showStatus('API Configured Successfully!', 'success');
+        });
         document.getElementById('detectBuildBtn').addEventListener('click', () => this.detectBuild());
         document.getElementById('localUrl').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.detectBuild();
