@@ -60,6 +60,7 @@ class DataSeederApp {
         this.setupDragAndDrop(); // Call it from here
         this.setupProgressPersistence();
         this.restoreProgress();
+        this.loadCachedCatalog();
     }
 
     setupProgressPersistence() {
@@ -183,6 +184,28 @@ class DataSeederApp {
         this.showStep(this.currentStep);
         this.saveProgress();
     }
+    async loadCachedCatalog() {
+        if (typeof idbKeyval === 'undefined') return;
+        try {
+            const cached = await idbKeyval.get('cachedApiProducts');
+            if (cached && cached.length > 0) {
+                apiService.cachedProducts = cached;
+                
+                // Unlock the search bar and update the button
+                document.getElementById('apiSearchInput').disabled = false;
+                const loadBtn = document.getElementById('apiLoadCatalogBtn');
+                loadBtn.innerHTML = '✅ Products Ready';
+                loadBtn.disabled = true;
+                loadBtn.style.background = '#ecfdf5';
+                loadBtn.style.color = '#065f46';
+                loadBtn.style.borderColor = '#10b981';
+                document.getElementById('apiTotalLoadedCount').textContent = `(${cached.length} products loaded)`;
+                this.refreshApiGrid();
+            }
+        } catch (error) {
+            console.warn('Failed to load cached catalog:', error);
+        }
+    }
 
     // Define it OUTSIDE of init(), as its own class method
     setupDragAndDrop() {
@@ -254,17 +277,28 @@ class DataSeederApp {
             containerType: { '1': 'Bottle', '2': 'Carton', '3': 'Can', '4': 'Case', '6': 'Packet', '10': 'Tetra Pak' },
             productUse: { 'base': 'Base Formula', 'fortifier': 'Fortifier', 'modular': 'Modular' },
             measurementUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' },
-            action: { 'create': 'Create', 'update': 'Update', 'barcode-update': 'Barcode Update' }
+            action: { 'create': 'Create', 'update': 'Update', 'barcode-update': 'Barcode Update', 'add-form-factor': 'Add Form Factor' }
         };
 
-        let orderedKeys = [
-            'action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode',
-            'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
-            'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared',
-            'containerType', 'unitQuantity', 'measurementVolume', 'measurementUnit'
-        ];
-
-        orderedKeys = orderedKeys.filter(k => !['containerType', 'unitQuantity', 'measurementVolume', 'barcode'].includes(k));
+        // --- DYNAMICALLY SHOW ONLY WHAT IS NEEDED ---
+        let orderedKeys = [];
+        if (product.action === 'add-form-factor') {
+            orderedKeys = ['action', 'productName', 'productCode'];
+        } else if (product.action === 'barcode-update') {
+            orderedKeys = ['action', 'productName', 'oldProductCode', 'newProductCode'];
+        } else if (product.action === 'update') {
+            orderedKeys = ['action', 'productName'];
+            if (Array.isArray(product.updateFields)) {
+                orderedKeys = orderedKeys.concat(product.updateFields);
+            }
+        } else {
+            // Default "Create" layout
+            orderedKeys = [
+                'action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode',
+                'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
+                'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit'
+            ];
+        }
 
         const detailsContainer = document.getElementById('previewDetails');
         let html = '';
@@ -274,6 +308,8 @@ class DataSeederApp {
             
             let formattedLabel = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             if (key === 'productCode') formattedLabel = 'Item Number';
+            if (key === 'oldProductCode') formattedLabel = 'Old Barcode';
+            if (key === 'newProductCode') formattedLabel = 'New Barcode';
             if (key === 'barcode') formattedLabel = 'Barcode';
             if (key === 'hl7Reference') formattedLabel = 'Base HL7 Reference';
             if (key === 'hl7Fortifier') formattedLabel = 'Fortifier HL7 Reference';
@@ -312,66 +348,67 @@ class DataSeederApp {
             `;
         }
 
-        html += `
-        <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
-            <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
-                <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
-                <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
-            </div>
-            
-            <div style="padding: 15px;">
-                <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
-        `;
-        
-        product.hierarchy.forEach((ff, i) => {
-            const isMissing = !ff.containerId;
-            const highlightStyle = isMissing 
-                ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
-                : '';
-
-            let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
-            
-            if (isMissing) typeSelect += `<option value="" selected disabled>Select Type...</option>`;
-            
-            for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
-                const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
-                typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
-            }
-            typeSelect += `</select>`;
-
-            // Only allow removing if it's not the very last remaining item
-            const removeBtn = product.hierarchy.length > 1 
-                ? `<button type="button" class="remove-preview-ff-btn" data-index="${i}" title="Remove Container" style="background:none; border:none; color:#ef4444; font-size:18px; font-weight:bold; cursor:pointer; margin-left: 6px; padding: 0 4px; line-height: 1;">&times;</button>`
-                : `<span style="width: 20px; margin-left: 6px;"></span>`;
-
-            // Enforced flex-wrap: nowrap and slightly smaller input widths to prevent the drop-down effect
+        // --- ONLY SHOW HIERARCHY TABLE FOR CREATE AND ADD-FORM-FACTOR ---
+        if (product.action === 'create' || product.action === 'add-form-factor') {
             html += `
-                <div style="background: #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; font-size: 13px; color: #0f172a; overflow-x: auto;">
-                    ${typeSelect}
-                    
-                    <span style="font-weight: bold; color: #334155; margin-left: 2px;">[</span>
-                    <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 100px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto; font-family: monospace;">
-                    <span style="font-weight: bold; color: #334155;">]</span>
-                    
-                    <span style="font-weight: bold; color: #334155; margin-left: 2px;">(</span>
-                    <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 40px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
-                    <span style="font-weight: bold; color: #334155;">)</span>
-                    
-                    <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-                        <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
-                        <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 55px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
-                    </div>
-                    ${removeBtn}
+            <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
+                <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
+                    <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
+                    <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
                 </div>
+                
+                <div style="padding: 15px;">
+                    <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
             `;
-        });
+            
+            product.hierarchy.forEach((ff, i) => {
+                const isMissing = !ff.containerId;
+                const highlightStyle = isMissing 
+                    ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
+                    : '';
 
-        html += `
-                <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-                    <button type="button" class="btn btn-secondary btn-small" id="addPreviewContainerBtn" style="background: #f1f5f9; border: 1px dashed #94a3b8; color: #475569;">+ Add Outer Container</button>
+                let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
+                
+                if (isMissing) typeSelect += `<option value="" selected disabled>Select Type...</option>`;
+                
+                for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
+                    const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
+                    typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
+                }
+                typeSelect += `</select>`;
+
+                const removeBtn = product.hierarchy.length > 1 
+                    ? `<button type="button" class="remove-preview-ff-btn" data-index="${i}" title="Remove Container" style="background:none; border:none; color:#ef4444; font-size:18px; font-weight:bold; cursor:pointer; margin-left: 6px; padding: 0 4px; line-height: 1;">&times;</button>`
+                    : `<span style="width: 20px; margin-left: 6px;"></span>`;
+
+                html += `
+                    <div style="background: #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; font-size: 13px; color: #0f172a; overflow-x: auto;">
+                        ${typeSelect}
+                        
+                        <span style="font-weight: bold; color: #334155; margin-left: 2px;">[</span>
+                        <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 100px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto; font-family: monospace;">
+                        <span style="font-weight: bold; color: #334155;">]</span>
+                        
+                        <span style="font-weight: bold; color: #334155; margin-left: 2px;">(</span>
+                        <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 40px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
+                        <span style="font-weight: bold; color: #334155;">)</span>
+                        
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                            <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
+                            <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 55px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
+                        </div>
+                        ${removeBtn}
+                    </div>
+                `;
+            });
+
+            html += `
+                    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                        <button type="button" class="btn btn-secondary btn-small" id="addPreviewContainerBtn" style="background: #f1f5f9; border: 1px dashed #94a3b8; color: #475569;">+ Add Outer Container</button>
+                    </div>
                 </div>
-            </div>
-        </div>`;
+            </div>`;
+        }
 
         document.getElementById('previewTitle').textContent = `Edit: ${product.productName || 'Product'}`;
         detailsContainer.innerHTML = html;
@@ -767,202 +804,215 @@ class DataSeederApp {
         }
     }
     updateApiSelectionCount() {
+
         const checked = document.querySelectorAll('.api-product-cb:checked').length;
         document.getElementById('apiSelectedCount').textContent = `${checked} product(s) selected`;
         document.getElementById('stageSelectedApiBtn').disabled = checked === 0;
     }
     setupEventListeners() {
-        // --- LIVE CATALOG SEARCH LOGIC ---
-        document.getElementById('apiSearchBtn').addEventListener('click', async () => {
-            const searchInput = document.getElementById('apiSearchInput').value.toLowerCase().trim();
-            const btn = document.getElementById('apiSearchBtn');
-            const tbody = document.getElementById('apiResultsBody');
-        // --- REAL-TIME TYPING SEARCH LOGIC ---
-        document.getElementById('apiSearchInput').addEventListener('input', () => {
-            // Only perform real-time search if the catalog has already been fetched
-            if (!apiService.cachedProducts || apiService.cachedProducts.length === 0) return;
+        // --- INSTANT STAGE / UNSTAGE CHECKBOX LOGIC ---
+        document.getElementById('apiResultsBody').addEventListener('change', async (e) => {
+            if (!e.target.classList.contains('api-product-cb')) return;
             
-            const searchInput = document.getElementById('apiSearchInput').value.toLowerCase().trim();
-            const tbody = document.getElementById('apiResultsBody');
-            
-            // Filter the locally cached data
-            const filtered = apiService.cachedProducts.filter(p => {
-                if (!searchInput) return true;
-                return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
-                       (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
-                       (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
-            }).slice(0, 50); // Cap at 50 results to keep the UI fast
+            const cb = e.target;
+            const itemId = cb.value;
 
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#94a3b8;">No matching products found.</td></tr>';
+            if (cb.checked) {
+                // ADD TO BATCH
+                try {
+                    cb.disabled = true;
+                    this.showStatus('Fetching details...', 'info');
+
+                    const detailedItems = await apiService.fetchProductDetails([itemId]);
+                    if (detailedItems && detailedItems.length > 0) {
+                        const apiItem = detailedItems[0];
+                        const basicData = apiService.cachedProducts.find(p => p.ItemID.toString() === itemId.toString()) || {};
+                        
+                        let calValue = 20;
+                        if (apiItem.Nutrients && Array.isArray(apiItem.Nutrients)) {
+                            const calObj = apiItem.Nutrients.find(n => (n.Description || '').toLowerCase().includes('calorie'));
+                            if (calObj && calObj.Value) calValue = parseFloat(calObj.Value) || calValue;
+                        }
+
+                        let hierarchy = [];
+                        if (basicData.PrimaryPackage) {
+                            let cId = '1';
+                            const pkg = basicData.PrimaryPackage.toLowerCase();
+                            if (pkg.includes('carton')) cId = '2';
+                            else if (pkg.includes('can')) cId = '3';
+                            else if (pkg.includes('case')) cId = '4';
+                            else if (pkg.includes('packet')) cId = '6';
+
+                            hierarchy.push({ containerId: cId, barcode: basicData.PrimaryBarcode || '', quantity: 1, volume: parseFloat(basicData.Displacement) || 0 });
+                        }
+
+                        this.products.push({
+                            apiItemId: itemId.toString(), 
+                            action: 'create',
+                            manufacturer: 'Undefined',
+                            productName: (basicData.FamilyName || 'Imported Product').replace(/[®™©]/g, '').trim(),
+                            shortName: (basicData.ItemFlavor || '').replace(/[®™©]/g, '').trim(),
+                            productCode: apiItem.ItemNumber || basicData.ItemNumber || '',
+                            barcode: basicData.PrimaryBarcode || '',
+                            productType: (basicData.FormType || '').toLowerCase().includes('powder') ? '3' : '1',
+                            productUse: 'base',
+                            categoryId: '3',
+                            caloricValue: calValue,
+                            displacement: parseFloat(basicData.Displacement) || 1.0,
+                            expirationOpened: 48,
+                            expirationPrepared: 48,
+                            measurementUnit: 'ml',
+                            hierarchy: hierarchy.length > 0 ? hierarchy : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }]
+                        });
+
+                        this.renderProductsTable();
+                        this.saveProgress();
+                        this.showStatus('Added to batch!', 'success');
+                    }
+                } catch (error) {
+                    this.showStatus(error.message, 'error');
+                    cb.checked = false; 
+                } finally {
+                    cb.disabled = false;
+                }
+            } else {
+                // REMOVE FROM BATCH
+                const index = this.products.findIndex(p => p.apiItemId === itemId.toString());
+                if (index !== -1) {
+                    this.products.splice(index, 1);
+                    this.renderProductsTable();
+                    this.saveProgress();
+                    this.showStatus('Removed from batch', 'success');
+                }
+            }
+            this.updateApiSelectionCount();
+        });
+        // --- REAL-TIME TYPING SEARCH LOGIC ---
+        const searchInput = document.getElementById('apiSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.refreshApiGrid());
+        }
+        // --- SWITCH FOLDER LOGIC ---
+        document.getElementById('changeFolderBtn').addEventListener('click', async () => {
+            // Fix: Removed 'window.' and use the same check your other functions use
+            if (typeof fsAccessManager === 'undefined' || !fsAccessManager.isSupported()) {
+                this.showStatus('File system access not supported on this browser.', 'error');
                 return;
             }
-
-            // Render the updated table instantly
-            tbody.innerHTML = filtered.map(p => `
-                <tr>
-                    <td style="text-align: center;">
-                        <input type="checkbox" class="api-product-cb" value="${p.ItemID}" data-name="${p.FamilyName}">
-                    </td>
-                    <td>
-                        <strong style="color: #0f172a;">${p.FamilyName || 'Unnamed Product'}</strong><br>
-                        <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
-                    </td>
-                    <td style="font-size: 12px; color: #475569;">
-                        ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
-                        ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
-                    </td>
-                </tr>
-            `).join('');
-
-            // Re-attach listeners to the new checkboxes
-            document.querySelectorAll('.api-product-cb').forEach(cb => {
-                cb.addEventListener('change', () => this.updateApiSelectionCount());
-            });
-        });
-            // --- STAGE SELECTED PRODUCTS LOGIC ---
-        document.getElementById('stageSelectedApiBtn').addEventListener('click', async () => {
-            const checkboxes = document.querySelectorAll('.api-product-cb:checked');
-            if (checkboxes.length === 0) return;
-
-            const btn = document.getElementById('stageSelectedApiBtn');
-            const originalText = btn.textContent;
             
             try {
-                btn.textContent = 'Staging...';
-                btn.disabled = true;
-
-                // 1. Gather the selected Item IDs
-                const itemIds = Array.from(checkboxes).map(cb => cb.value);
+                // 1. Force the prompt to open regardless of what is saved
+                this.showStatus('Select your master project folder...', 'info');
+                const newRootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
                 
-                // 2. Fetch the deep dive data from API 3
-                const detailedItems = await apiService.fetchProductDetails(itemIds);
-
-                // 3. The Translation Layer: Map API data to your Seeder format
-                detailedItems.forEach(apiItem => {
-                    // Find the matching basic product data from our API 2 cache
-                    const basicData = apiService.cachedProducts.find(p => p.ItemID.toString() === apiItem.ItemID.toString()) || {};
-                    
-                    // Extract Calories from the API 3 Nutrients array (Assuming Category/Description contains "Calorie")
-                    let calValue = 20; // Default fallback
-                    if (apiItem.Nutrients && Array.isArray(apiItem.Nutrients)) {
-                        const calObj = apiItem.Nutrients.find(n => (n.Description || '').toLowerCase().includes('calorie'));
-                        if (calObj && calObj.Value) calValue = parseFloat(calObj.Value) || calValue;
-                    }
-
-                    // Build Hierarchy Array from API 2 packaging data
-                    let hierarchy = [];
-                    if (basicData.PrimaryPackage) {
-                        // Map API string to your container IDs
-                        let cId = '1'; // Default Bottle
-                        const pkg = basicData.PrimaryPackage.toLowerCase();
-                        if (pkg.includes('carton')) cId = '2';
-                        else if (pkg.includes('can')) cId = '3';
-                        else if (pkg.includes('case')) cId = '4';
-                        else if (pkg.includes('packet')) cId = '6';
-
-                        hierarchy.push({
-                            containerId: cId,
-                            barcode: basicData.PrimaryBarcode || '',
-                            quantity: 1,
-                            volume: parseFloat(basicData.Displacement) || 0
-                        });
-                    }
-                    
-                    // Push to Pending Batch
-                    this.products.push({
-                        action: 'create', // Defaulting to create, user can switch to update in the UI if needed
-                        manufacturer: 'Undefined', // Adjust if API provides a manufacturer field
-                        productName: basicData.FamilyName || 'Imported Product',
-                        shortName: basicData.FamilyName || '',
-                        productCode: apiItem.ItemNumber || basicData.ItemNumber || '',
-                        barcode: basicData.PrimaryBarcode || '',
-                        productType: (basicData.FormType || '').toLowerCase().includes('powder') ? '3' : '1',
-                        productUse: 'base',
-                        categoryId: '3',
-                        caloricValue: calValue,
-                        displacement: parseFloat(basicData.Displacement) || 1.0,
-                        expirationOpened: 48,
-                        expirationPrepared: 48,
-                        measurementUnit: 'ml',
-                        hierarchy: hierarchy.length > 0 ? hierarchy : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }]
-                    });
-                });
-
-                // 4. Update the UI
-                this.renderProductsTable();
-                this.saveProgress();
-                this.showStatus(`Successfully staged ${detailedItems.length} products!`, 'success');
+                // 2. Overwrite the IndexedDB save via your fsAccessManager
+                if (typeof idbKeyval !== 'undefined') {
+                    await idbKeyval.set('wampDirectoryHandle', newRootHandle);
+                }
                 
-                // Clear checkboxes
-                checkboxes.forEach(cb => cb.checked = false);
-                this.updateApiSelectionCount();
-
+                // 3. Re-run the folder detection to verify the new path
+                await this.ensureSeedersFolder();
+                this.showStatus(`Folder updated to: ${newRootHandle.name}`, 'success');
+                
             } catch (error) {
-                this.showStatus(error.message, 'error');
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
+                console.warn('Folder switch cancelled:', error);
             }
         });
+        // --- LOAD CATALOG & PROGRESS BAR LOGIC ---
+        document.getElementById('apiLoadCatalogBtn').addEventListener('click', async () => {
             if (!apiService.isConfigured()) {
                 this.showStatus('Please configure API settings first.', 'error');
                 document.getElementById('apiSettingsModal').classList.remove('hidden');
                 return;
             }
 
+            const btn = document.getElementById('apiLoadCatalogBtn');
+            const searchInput = document.getElementById('apiSearchInput');
+            const progWrapper = document.getElementById('apiLoadProgressWrapper');
+            const progBar = document.getElementById('apiLoadProgressBar');
+            const progText = document.getElementById('apiLoadProgressText');
+
             try {
-                btn.textContent = 'Loading...';
                 btn.disabled = true;
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:40px;">Fetching live catalog...</td></tr>';
+                btn.textContent = 'Loading...';
+                progWrapper.style.display = 'block';
+                progBar.style.width = '0%';
+                
+                const baseUrl = apiService.config.baseUrl.replace(/\/$/, '');
+                const facId = apiService.config.facilityId;
+                const headers = { 'Authorization': `Bearer ${apiService.config.token}`, 'Content-Type': 'application/json' };
 
-                // Fetch (or use cached) products from API 2
-                let products = apiService.cachedProducts;
-                if (!products || products.length === 0) {
-                    products = await apiService.fetchProducts();
+                // 1. Fetch initial page to get TotalRecords
+                const initialUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/0/1`;
+                const response = await fetch(initialUrl, { headers });
+                const json = await response.json();
+                
+                let allProducts = json.data?.ProductData || [];
+                const totalRecords = json.data?.TotalRecords || 0;
+                // --- EMPTY DATA CHECK ---
+                if (totalRecords === 0 || allProducts.length === 0) {
+                    this.showStatus('No products found for this facility. Please select a different one.', 'error');
+                    
+                    // Open the API settings modal automatically
+                    document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
+                    document.getElementById('apiToken').value = apiService.config.token;
+                    document.getElementById('apiSettingsModal').classList.remove('hidden');
+                    
+                    // Reset the load button
+                    btn.disabled = false;
+                    btn.textContent = '⬇️ Load Catalog';
+                    progWrapper.style.display = 'none';
+                    return; // Stop execution so it doesn't save an empty array
+                }
+                const limit = json.data?.Limit || 10;
+                let loadedCount = limit;
+
+                // 2. Fetch remaining pages and update progress bar
+                if (totalRecords > limit) {
+                    const fetchPromises = [];
+                    for (let offset = limit; offset < totalRecords; offset += limit) {
+                        const pageUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/${offset}/1`;
+                        
+                        const req = fetch(pageUrl, { headers }).then(res => res.json()).then(pageJson => {
+                            allProducts = allProducts.concat(pageJson.data?.ProductData || []);
+                            loadedCount += limit;
+                            
+                            // Calculate and update progress
+                            const percentage = Math.min(100, Math.round((loadedCount / totalRecords) * 100));
+                            progBar.style.width = `${percentage}%`;
+                            progText.textContent = `Downloading... ${percentage}%`;
+                        }).catch(e => console.warn(e));
+                        
+                        fetchPromises.push(req);
+                    }
+                    await Promise.all(fetchPromises); // Wait for all pages to finish downloading
                 }
 
-                // Filter the results locally for instant speed!
-                const filtered = products.filter(p => {
-                    if (!searchInput) return true;
-                    return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
-                           (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
-                           (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
-                }).slice(0, 50); // Cap at 50 to keep UI fast
-
-                if (filtered.length === 0) {
-                    tbody.innerHTML = '<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#94a3b8;">No matching products found.</td></tr>';
-                    return;
+                // 3. Save to memory and IndexedDB
+                apiService.cachedProducts = allProducts;
+                if (typeof idbKeyval !== 'undefined') {
+                    await idbKeyval.set('cachedApiProducts', allProducts);
                 }
 
-                // Render the table
-                tbody.innerHTML = filtered.map(p => `
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="checkbox" class="api-product-cb" value="${p.ItemID}" data-name="${p.FamilyName}">
-                        </td>
-                        <td>
-                            <strong style="color: #0f172a;">${p.FamilyName || 'Unnamed Product'}</strong><br>
-                            <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
-                        </td>
-                        <td style="font-size: 12px; color: #475569;">
-                            ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
-                            ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
-                        </td>
-                    </tr>
-                `).join('');
-
-                // Add listener to enable/disable the "Stage Selected" button
-                document.querySelectorAll('.api-product-cb').forEach(cb => {
-                    cb.addEventListener('change', () => this.updateApiSelectionCount());
-                });
+                // 4. Update UI
+                progBar.style.width = '100%';
+                progText.textContent = 'Complete!';
+                searchInput.disabled = false;
+                
+                btn.innerHTML = '✅ Products Ready';
+                btn.style.background = '#ecfdf5';
+                btn.style.color = '#065f46';
+                btn.style.borderColor = '#10b981';
+                document.getElementById('apiTotalLoadedCount').textContent = `(${allProducts.length} products loaded)`;
+                searchInput.dispatchEvent(new Event('input'));
+                setTimeout(() => progWrapper.style.display = 'none', 2000);
+                this.showStatus(`Successfully loaded ${allProducts.length} products!`, 'success');
 
             } catch (error) {
                 this.showStatus(error.message, 'error');
-                tbody.innerHTML = `<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#ef4444;">${error.message}</td></tr>`;
-            } finally {
-                btn.textContent = 'Search';
                 btn.disabled = false;
+                btn.textContent = '⬇️ Load Catalog';
+                progWrapper.style.display = 'none';
             }
         });
         // API Settings Modal Listeners
@@ -1330,6 +1380,13 @@ async ensureSeedersFolder() {
                 { name: 'productName', label: 'Product Name *', type: 'text', required: true, fullWidth: true },
                 { name: 'oldProductCode', label: 'Old Barcode *', type: 'text', required: true },
                 { name: 'newProductCode', label: 'New Barcode *', type: 'text', required: true },
+            ],
+            // --- NEW MODULE: ADD FORM FACTOR ---
+            'add-form-factor': [
+                { type: 'section', label: 'Product Identification' },
+                { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
+                { type: 'section', label: 'New Packaging Hierarchy' },
+                { name: 'hierarchy', label: 'Packaging Hierarchy (Top = Innermost Unit)', type: 'packaging-hierarchy' }
             ]
         };
         return fields[actionType] || [];
@@ -1778,6 +1835,46 @@ async ensureSeedersFolder() {
         if (generateBtn) generateBtn.style.display = 'inline-flex';
         document.querySelector('.product-count').textContent = this.products.length;
     }
+    refreshApiGrid() {
+        const tbody = document.getElementById('apiResultsBody');
+        const searchInput = (document.getElementById('apiSearchInput').value || '').toLowerCase().trim();
+        
+        if (!apiService.cachedProducts || apiService.cachedProducts.length === 0) return;
+
+        const filtered = apiService.cachedProducts.filter(p => {
+            if (!searchInput) return true;
+            return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
+                   (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
+                   (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
+        }).slice(0, 50);
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr class="empty-state"><td colspan="3" style="text-align:center; padding:40px; color:#94a3b8;">No matching products found.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(p => {
+            const isChecked = this.products.some(prod => prod.apiItemId === p.ItemID.toString()) ? 'checked' : '';
+            // Remove trademarks and trim extra spaces
+            const cleanFamilyName = (p.FamilyName || 'Unnamed Product').replace(/[®™©]/g, '').trim();
+            
+            return `
+            <tr>
+                <td style="text-align: center;">
+                    <input type="checkbox" class="api-product-cb" value="${p.ItemID}" data-name="${cleanFamilyName}" ${isChecked}>
+                </td>
+                <td>
+                    <strong style="color: #0f172a;">${cleanFamilyName}</strong><br>
+                    <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
+                </td>
+                <td style="font-size: 12px; color: #475569;">
+                    ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
+                    ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
+                </td>
+            </tr>
+            `;
+        }).join('');
+    }
 
     removeProduct(index) {
         this.products.splice(index, 1);
@@ -2041,6 +2138,7 @@ async ensureSeedersFolder() {
         this.updateStepIndicator();
         this.showStep(1);
         this.renderProductsTable();
+        this.loadCachedCatalog();
     }
 }
 

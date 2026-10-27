@@ -10,6 +10,7 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
     const creates = products.filter(p => p.action === 'create');
     const updates = products.filter(p => p.action === 'update');
     const barcodeUpdates = products.filter(p => p.action === 'barcode-update');
+    const formFactorAdditions = products.filter(p => p.action === 'add-form-factor');
 
     // ==========================================
     // BLOCK 1: CREATE PRODUCTS
@@ -348,7 +349,104 @@ ${barcodeData}
             }
         }\n`;
     }
+    // ==========================================
+    // BLOCK 4: ADD FORM FACTOR TO EXISTING
+    // ==========================================
+    if (formFactorAdditions.length > 0) {
+        let addFfData = formFactorAdditions.map(product => {
+            let hierarchyStr = '[]';
+            if (product.hierarchy && product.hierarchy.length > 0) {
+                const ffMappings = { '1': 'Bottle', '2': 'Carton', '3': 'Can', '4': 'Case', '6': 'Packet', '10': 'Tetra Pak' };
+                let hArray = product.hierarchy.map(ff => {
+                    return `[
+                        'name' => '${ffMappings[ff.containerId] || 'Bottle'}',
+                        'barcode' => '${(ff.barcode || '').replace(/'/g, "\\'")}',
+                        'quantity' => ${ff.quantity || 0},
+                        'volume' => ${ff.volume || 100}
+                    ]`;
+                });
+                hierarchyStr = `[\n                    ${hArray.join(',\n                    ')}\n                ]`;
+            }
 
+            return `            [
+                'productName' => '${(product.productName || '').replace(/'/g, "\\'")}',
+                'productCode' => '${(product.productCode || '').replace(/'/g, "\\'")}',
+                'hierarchy' => ${hierarchyStr}
+            ]`;
+        }).join(',\n');
+
+        operationCode += `
+        // ---------------------------------------------------------
+        // ADD FORM FACTORS TO EXISTING PRODUCTS
+        // ---------------------------------------------------------
+        $addFormFactors = [
+${addFfData}
+        ];
+
+        foreach ($addFormFactors as $p) {
+            $productName = $p['productName'];
+            $hierarchyCount = count($p['hierarchy']);
+            
+            // 1. Find the parent product
+            $product = NutritionProductType::where('${C.NAME}', $productName)->first();
+            
+            if (!$product) {
+                $this->command->error("-> Failed: Could not find existing product '$productName'.");
+                continue;
+            }
+
+            // 2. The innermost unit dictates the Item code
+            $innerFf = $p['hierarchy'][0];
+            $itemBarcode = !empty($p['productCode']) ? $p['productCode'] : $innerFf['barcode'];
+            $innerFfId = DB::table('nutrition_product_form_factor_types')->where('name', $innerFf['name'])->value('id') ?? 1;
+
+            // 3. Create the Item record
+            $nptItem = NutritionProductTypeItem::create([
+                '${C.ID}' => $product->${C.ID},
+                '${C.ITEM_CODE}' => $itemBarcode,
+                '${C.FF_TYPE_ID}' => $innerFfId,
+                '${C.UOM}' => $product->${C.UOM},
+                '${C.ITEM_VOL}' => $innerFf['volume'],
+                'formtypeitemName' => $productName,
+                '${C.IS_PROTECTED}' => 1,
+                'formtypeitemActive' => 1
+            ]);
+
+            // 4. Build the Form Factor chain
+            $parentId = null;
+            for ($i = $hierarchyCount - 1; $i >= 0; $i--) {
+                $ff = $p['hierarchy'][$i];
+                $ffTypeId = DB::table('nutrition_product_form_factor_types')->where('name', $ff['name'])->value('id') ?? 1;
+
+                $newFf = NutritionProductTypeFormFactor::create([
+                    '${C.FF_TYPE_ID}' => $ffTypeId,
+                    '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
+                    '${C.FF_PARENT}' => $parentId,
+                    '${C.FF_BARCODE}' => $ff['barcode'],
+                    '${C.FF_QTY}' => $ff['quantity'],
+                    '${C.IS_PROTECTED}' => 1,
+                    'formfactorActive' => 1,
+                    'created_at' => Carbon::now()
+                ]);
+                $parentId = $newFf->id; 
+            }
+
+            // 5. Ensure the inner form factor is linked to the main product applicable list
+            $exists = DB::table('${T.APPLICABLE_FF}')
+                ->where('productTypeID', $product->${C.ID})
+                ->where('formFactorTypeID', $nptItem->${C.FF_TYPE_ID})
+                ->exists();
+
+            if (!$exists) {
+                DB::table('${T.APPLICABLE_FF}')->insert([
+                    "productTypeID" => $product->${C.ID},
+                    "formFactorTypeID" => $nptItem->${C.FF_TYPE_ID}
+                ]);
+            }
+            
+            $this->command->info("-> Attached new item $itemBarcode to product $productName.");
+        }\n`;
+    }
     return `<?php
 
 namespace TMS\\Customers\\Database\\Seeds\\ClientDataUpdates;
