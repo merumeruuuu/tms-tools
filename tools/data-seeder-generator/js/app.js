@@ -294,7 +294,7 @@ class DataSeederApp {
         } else {
             // Default "Create" layout
             orderedKeys = [
-                'action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode',
+                'action', 'manufacturer', 'productName', 'shortName', 'productCode',
                 'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
                 'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit'
             ];
