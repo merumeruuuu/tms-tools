@@ -13,12 +13,14 @@ class WampDetector {
     parseUrl(url) {
         try {
             // Normalize URL
-            if (!url.startsWith('http')) {
+            if (!/^https?:\/\//i.test(url)) {
                 url = 'http://' + url;
             }
             
             const urlObj = new URL(url);
-            const hostname = urlObj.hostname;
+            const hostname = urlObj.hostname.toLowerCase().endsWith('.local')
+                ? urlObj.hostname
+                : `${urlObj.hostname}.local`;
             const bare = hostname.replace(/\.local$/i, '');
 
             // Extract client name and the FULL version string (everything from 'v' onward)
@@ -52,7 +54,9 @@ class WampDetector {
                 if (numMatch) {
                     const major = parseInt(numMatch[1]);
                     const minor = parseInt(numMatch[2]);
-                    if (major === 7 && minor === 23) {
+                    if (major === 22) {
+                        quarter = 'Q1';
+                    } else if (major === 7 && minor === 23) {
                         quarter = 'Q1';
                     } else if (major === 7 && minor === 2) {
                         quarter = 'Q2';
@@ -73,6 +77,7 @@ class WampDetector {
                 version,
                 quarter,
                 hostname,
+                buildFolderName: bare,
                 isValid: true
             };
 
@@ -107,6 +112,7 @@ class WampDetector {
             version: urlInfo.version,
             quarter: urlInfo.quarter,
             hostname: urlInfo.hostname,
+            buildFolderName: urlInfo.buildFolderName || urlInfo.hostname.replace(/\.local$/i, ''),
             buildPath,
             nextSeederNum,
             seedersPath: `${buildPath}\\vendor\\timeless\\customers\\src\\Database\\Seeds\\ClientDataUpdates`,
@@ -155,9 +161,7 @@ class WampDetector {
      * Validate the URL format
      */
     validateUrl(url) {
-        // Updated regex: makes the trailing slash and anything after it optional (\/.*)?
-        const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.local(\/.*)?$/i;
-        return urlPattern.test(url);
+        return this.parseUrl(url).isValid;
     }
 }
 

@@ -50,6 +50,10 @@ class DataSeederApp {
         this.generatedSeeder = null;
         this.seederNumber = null;
         this.seedersDirHandle = null;
+        this.buildDetectionRun = 0;
+        this.pendingBuildFolderInfo = null;
+        this.wampRootHandle = null;
+        this.pendingRestoredStep = null;
 
         this.init();
     }
@@ -177,7 +181,9 @@ class DataSeederApp {
         if (outputRadio) outputRadio.checked = true;
 
         const requestedStep = Number(progress.currentStep) || 1;
-        this.currentStep = requestedStep === 3 && !this.generatedSeeder ? 2 : requestedStep;
+        const restoredStep = requestedStep === 3 && !this.generatedSeeder ? 2 : requestedStep;
+        this.pendingRestoredStep = restoredStep > 1 && this.buildInfo ? restoredStep : null;
+        this.currentStep = this.pendingRestoredStep ? 1 : restoredStep;
         if (this.currentStep > 1 && !this.buildInfo) this.currentStep = 1;
         if (progress.outputMethod === 'auto-write') document.getElementById('outputDownload').checked = true;
         this.updateStepIndicator();
@@ -804,6 +810,10 @@ class DataSeederApp {
         document.getElementById('stageSelectedApiBtn').disabled = checked === 0;
     }
     setupEventListeners() {
+        document.getElementById('dismissPreviewBtn').addEventListener('click', () => {
+            // Simply hide the modal without calling savePreviewChanges()
+            document.getElementById('previewModal').classList.add('hidden');
+        });
         // --- INSTANT STAGE / UNSTAGE CHECKBOX LOGIC ---
         document.getElementById('apiResultsBody').addEventListener('change', async (e) => {
             if (!e.target.classList.contains('api-product-cb')) return;
@@ -1078,8 +1088,7 @@ class DataSeederApp {
             if (e.key === 'Enter') this.detectBuild();
         });
         
-        const linkBtn = document.getElementById('linkFolderBtn');
-        if (linkBtn) linkBtn.addEventListener('click', () => this.ensureSeedersFolder(true));
+        document.getElementById('grantBuildFolderBtn').addEventListener('click', () => this.grantBuildFolderAccess());
 
         document.getElementById('continueBtn').addEventListener('click', () => this.goToStep(2));
         document.getElementById('savedBuildsSelect').addEventListener('change', (e) => {
@@ -1135,18 +1144,28 @@ class DataSeederApp {
     }
 
     async detectBuild() {
+        const runId = ++this.buildDetectionRun;
         const url = document.getElementById('localUrl').value.trim();
         const errorEl = document.getElementById('urlError');
         errorEl.classList.remove('show');
+        this.setBuildSearchState(true, false, 'Parsing build URL...');
+        this.seedersDirHandle = null;
+        this.seederNumber = null;
+        this.pendingBuildFolderInfo = null;
+        document.getElementById('buildDetailsCard').style.display = 'none';
+        document.getElementById('grantBuildFolderBtn').style.display = 'none';
+        this.updateSeederNumberDisplay('', 'searching');
 
         if (!url) {
+            this.setBuildSearchState(false, false);
             errorEl.textContent = 'Please enter a URL';
             errorEl.classList.add('show');
             return;
         }
 
         if (!wampDetector.validateUrl(url)) {
-            errorEl.textContent = 'Invalid URL format. Expected: http://client-vX-Y-Z.local/';
+            this.setBuildSearchState(false, false);
+            errorEl.textContent = 'Enter a build hostname such as client-v7-3-1, or its .local URL.';
             errorEl.classList.add('show');
             return;
         }
@@ -1155,7 +1174,22 @@ class DataSeederApp {
             const urlInfo = wampDetector.parseUrl(url);
             if (!urlInfo.isValid) throw new Error(urlInfo.error);
 
+            this.buildInfo = {
+                clientName: urlInfo.clientName,
+                version: urlInfo.version,
+                quarter: urlInfo.quarter,
+                hostname: urlInfo.hostname,
+                buildFolderName: urlInfo.buildFolderName,
+                buildPath: urlInfo.buildFolderName
+            };
+            document.getElementById('clientName').textContent = this.buildInfo.clientName;
+            document.getElementById('buildVersion').textContent = this.buildInfo.version;
+            document.getElementById('buildQuarter').textContent = this.buildInfo.quarter;
+            document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+            document.getElementById('buildDetailsCard').style.display = 'flex';
+
             this.buildInfo = await wampDetector.detectLocalBuild(urlInfo);
+            if (runId !== this.buildDetectionRun) return;
 
             document.getElementById('clientName').textContent = this.buildInfo.clientName;
             document.getElementById('buildVersion').textContent = this.buildInfo.version;
@@ -1165,73 +1199,263 @@ class DataSeederApp {
             document.getElementById('buildDetailsCard').style.display = 'flex';
             
             // Attempt to read the folder silently, or prompt if it's the very first time
-            await this.ensureSeedersFolder();
+            await this.ensureSeedersFolder(false, runId);
+            if (runId !== this.buildDetectionRun) return;
 
             this.rememberBuild();
 
         } catch (error) {
+            if (runId !== this.buildDetectionRun) return;
+            this.setBuildSearchState(false, false);
             errorEl.textContent = error.message;
             errorEl.classList.add('show');
         }
     }
 
-async ensureSeedersFolder() {
+    getProjectRootPath(documentRoot) {
+        return documentRoot ? documentRoot.replace(/[\\/]public$/i, '') : '';
+    }
+
+    setBuildSearchState(searching, ready, message = 'Searching build folders...') {
+        const indicator = document.getElementById('buildSearchIndicator');
+        const nextButton = document.getElementById('continueBtn');
+        if (indicator) {
+            indicator.hidden = !searching;
+            document.getElementById('buildSearchText').textContent = message;
+        }
+        if (nextButton) nextButton.disabled = !ready;
+        if (ready && this.pendingRestoredStep) {
+            this.currentStep = this.pendingRestoredStep;
+            this.pendingRestoredStep = null;
+            this.updateStepIndicator();
+            this.showStep(this.currentStep);
+        }
+    }
+
+    async grantBuildFolderAccess() {
+        if (!this.pendingBuildFolderInfo) return;
+        const selectedBuild = this.pendingBuildFolderInfo;
+        const runId = this.buildDetectionRun;
+
+        try {
+            this.setBuildSearchState(true, false, 'Restoring saved folder access...');
+            this.showStatus(`Select the common parent folder containing ${selectedBuild.buildFolderName} and your other builds.`, 'info');
+            const folderResult = await fsAccessManager.pickSharedBuildParent(selectedBuild, this.wampRootHandle || undefined);
+            if (runId !== this.buildDetectionRun || this.buildInfo !== selectedBuild) return;
+
+            this.seedersDirHandle = folderResult.handle;
+            this.buildInfo.buildPath = this.getProjectRootPath(selectedBuild.documentRoot) || folderResult.relativePath;
+            document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+            document.getElementById('grantBuildFolderBtn').style.display = 'none';
+            const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
+            if (runId !== this.buildDetectionRun) return;
+            this.seederNumber = highest + 1;
+            this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
+            this.updateFolderLinkUI(true, '✅ Shared build parent saved for future builds.');
+            this.showStatus('Build parent linked and remembered for sibling builds.', 'success');
+            this.setBuildSearchState(false, true);
+            this.rememberBuild();
+        } catch (error) {
+            this.setBuildSearchState(false, false);
+            if (error.name !== 'AbortError') this.showStatus(error.message, 'error');
+        }
+    }
+
+async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
+        const isCurrentRun = () => runId === this.buildDetectionRun;
+        if (!isCurrentRun()) return;
+        this.pendingBuildFolderInfo = null;
+        this.seedersDirHandle = null;
+        this.seederNumber = null;
+        document.getElementById('buildPath').textContent = this.buildInfo?.buildPath || '';
+        document.getElementById('grantBuildFolderBtn').style.display = 'none';
+        this.setBuildSearchState(true, false, 'Searching permitted folders...');
+        this.updateSeederNumberDisplay('', 'searching');
+        document.getElementById('folderLinkStatus').textContent = 'Searching linked folder...';
+        document.getElementById('folderLinkStatus').classList.remove('linked');
+        document.getElementById('folderLinkStatus').style.color = '#64748b';
+
         if (!fsAccessManager.isSupported()) {
+            this.setBuildSearchState(false, false);
             this.showStatus('Browser does not support folder access.', 'error');
             return;
         }
 
         try {
+            const rememberedParents = await fsAccessManager.getSharedBuildParentsForBuild(this.buildInfo);
+            for (const parent of rememberedParents) {
+                const rememberedResult = await fsAccessManager.getSeedersDirHandle(
+                    this.buildInfo,
+                    parent,
+                    isCurrentRun,
+                    ''
+                );
+                if (!isCurrentRun()) return;
+                if (!rememberedResult) continue;
+
+                this.seedersDirHandle = rememberedResult.handle;
+                this.buildInfo.documentRoot = '';
+                this.buildInfo.buildPath = `${parent.name}\\${rememberedResult.relativePath}`;
+                document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+                const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
+                if (!isCurrentRun()) return;
+                this.seederNumber = highest + 1;
+                this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
+                this.updateFolderLinkUI(true, '✅ Matched URL folder in saved parent.');
+                this.showStatus('Ready to generate!', 'success');
+                this.setBuildSearchState(false, true);
+                return;
+            }
+
             // Check memory for previous connection (triggers browser alert, not Windows Explorer)
             let rootHandle = await fsAccessManager.getRootHandleWithPermission();
             
             if (!rootHandle) {
-                // FIRST TIME EVER: Open Windows Explorer
-                this.showStatus('Please select your WAMP folder to enable auto-write.', 'info');
+                this.showStatus('Select a drive or common parent folder that contains your build folders.', 'info');
                 rootHandle = await fsAccessManager.linkRoot();
             }
+            if (!isCurrentRun()) return;
+            this.wampRootHandle = rootHandle;
 
-            // Trace path to seeders
-            const folderResult = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle);
+            let folderResult = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle, isCurrentRun, '');
+            if (!isCurrentRun()) return;
+
+            let documentRoot = '';
+            if (!folderResult) {
+                const hostsFile = await fsAccessManager.getHostsFileWithPermission();
+                const hostsIp = hostsFile
+                    ? await fsAccessManager.findHostsIp(this.buildInfo.hostname, hostsFile)
+                    : null;
+                documentRoot = await fsAccessManager.findVhostDocumentRoot(this.buildInfo.hostname, rootHandle, this.buildInfo, hostsIp);
+                if (!documentRoot) {
+                    const vhostRoot = await fsAccessManager.getVhostRootWithPermission();
+                    if (vhostRoot) {
+                        documentRoot = await fsAccessManager.findVhostDocumentRoot(this.buildInfo.hostname, vhostRoot, this.buildInfo, hostsIp);
+                    }
+                }
+                if (!isCurrentRun()) return;
+            }
+
+            this.buildInfo.documentRoot = documentRoot || '';
+            const storedProjectHandle = await fsAccessManager.getStoredBuildFolderHandle(this.buildInfo);
+            const savedProjectHandle = await fsAccessManager.getBuildFolderHandle(this.buildInfo);
+            if (!isCurrentRun()) return;
+            if (savedProjectHandle) {
+                const savedSeedersHandle = await fsAccessManager.getDirectoryPath(savedProjectHandle, [
+                    'vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'
+                ]);
+                if (savedSeedersHandle) {
+                    this.seedersDirHandle = savedSeedersHandle;
+                    this.buildInfo.buildPath = this.getProjectRootPath(documentRoot) || savedProjectHandle.name;
+                    document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+                    const highest = await fsAccessManager.getHighestSeederNumber(savedSeedersHandle);
+                    if (!isCurrentRun()) return;
+                    this.seederNumber = highest + 1;
+                    this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
+                    this.updateFolderLinkUI(true, '✅ Remembered build folder access restored.');
+                    this.showStatus('Ready to generate!', 'success');
+                    this.setBuildSearchState(false, true);
+                    return;
+                }
+            }
+
+            const sharedParents = await fsAccessManager.getSharedBuildParentsForBuild(this.buildInfo);
+            for (const parent of sharedParents) {
+                const sharedResult = await fsAccessManager.getSeedersDirHandle(
+                    this.buildInfo,
+                    parent,
+                    isCurrentRun,
+                    documentRoot || ''
+                );
+                if (!isCurrentRun()) return;
+                if (sharedResult) {
+                    this.seedersDirHandle = sharedResult.handle;
+                    this.buildInfo.buildPath = this.getProjectRootPath(documentRoot) || `${parent.name}\\${sharedResult.relativePath}`;
+                    document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+                    const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
+                    if (!isCurrentRun()) return;
+                    this.seederNumber = highest + 1;
+                    this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
+                    this.updateFolderLinkUI(true, '✅ Matched saved shared build parent.');
+                    this.showStatus('Ready to generate!', 'success');
+                    this.setBuildSearchState(false, true);
+                    return;
+                }
+            }
+
+            if (storedProjectHandle && documentRoot) {
+                this.pendingBuildFolderInfo = this.buildInfo;
+                this.buildInfo.buildPath = this.getProjectRootPath(documentRoot);
+                document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+                document.getElementById('grantBuildFolderBtn').textContent = 'Link Shared Build Folder';
+                document.getElementById('grantBuildFolderBtn').style.display = 'inline-block';
+                this.updateFolderLinkUI(false, 'Saved project access needs permission again, or link its shared parent.');
+                this.updateSeederNumberDisplay('', 'action required');
+                this.showStatus('Restore permission to the saved build folder to continue.', 'info');
+                this.setBuildSearchState(false, false);
+                return;
+            }
+
+            // Use the URL-matched folder or resolve it through the vhost DocumentRoot.
+            if (!folderResult && documentRoot) {
+                folderResult = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle, isCurrentRun, documentRoot);
+                if (!isCurrentRun()) return;
+            }
 
             if (!folderResult) {
-                throw new Error('Could not find one matching project folder. Select a folder containing the local builds.');
+                this.pendingBuildFolderInfo = this.buildInfo;
+                this.buildInfo.buildPath = this.getProjectRootPath(documentRoot) || this.buildInfo.buildFolderName;
+                document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
+                document.getElementById('grantBuildFolderBtn').textContent = 'Link Shared Build Folder';
+                document.getElementById('grantBuildFolderBtn').style.display = 'inline-block';
+                this.updateFolderLinkUI(false, 'Build folder not found in permitted folders. Link its common parent once.');
+                this.updateSeederNumberDisplay('', 'action required');
+                this.showStatus(`Could not access ${this.buildInfo.buildFolderName}. Select its parent folder once to save access.`, 'info');
+                this.setBuildSearchState(false, false);
+                return;
             }
 
             this.seedersDirHandle = folderResult.handle;
-            this.buildInfo.buildPath = folderResult.relativePath === rootHandle.name
+            this.pendingBuildFolderInfo = null;
+            this.buildInfo.documentRoot = documentRoot || '';
+            this.buildInfo.buildPath = this.getProjectRootPath(documentRoot) || (folderResult.relativePath === rootHandle.name
                 ? rootHandle.name
-                : `${rootHandle.name}\\${folderResult.relativePath}`;
+                : `${rootHandle.name}\\${folderResult.relativePath}`);
             document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
             
             // Count the files!
             const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
+            if (!isCurrentRun()) return;
             this.seederNumber = highest + 1;
             
             this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
-            this.updateFolderLinkUI(true, '✅ Folder linked & scanned successfully.');
+            this.updateFolderLinkUI(true, documentRoot
+                ? '✅ Matched Apache vhost and scanned project.'
+                : '✅ Folder linked & scanned successfully.');
             this.showStatus('Ready to generate!', 'success');
+            this.setBuildSearchState(false, true);
 
         } catch (error) {
+            if (!isCurrentRun()) return;
+            this.setBuildSearchState(false, false);
             console.error(error);
-            this.updateFolderLinkUI(false, '⚠️ Manual input required.');
+            this.seedersDirHandle = null;
+            this.updateFolderLinkUI(false, error.message || 'Could not locate this build folder.');
             this.updateSeederNumberDisplay('', 'action required');
+            this.showStatus(error.message || 'Could not locate this build folder.', 'error');
         }
     }
     updateFolderLinkUI(linked, message) {
         const statusEl = document.getElementById('folderLinkStatus');
-        const linkBtn = document.getElementById('linkFolderBtn');
         
         statusEl.textContent = message;
         
         if (linked) {
             statusEl.classList.add('linked');
             statusEl.style.color = '#10b981';
-            if(linkBtn) linkBtn.style.display = 'none';
         } else {
             statusEl.classList.remove('linked');
             statusEl.style.color = '#ef4444';
-            if(linkBtn) linkBtn.style.display = 'inline-block';
         }
     }
 
@@ -2096,7 +2320,7 @@ async ensureSeedersFolder() {
         if (!fav) return;
         document.getElementById('localUrl').value = `http://${fav.hostname}/`;
         document.getElementById('forgetBuildBtn').style.display = 'inline-block';
-        this.detectBuild();
+        return this.detectBuild();
     }
 
     forgetSelectedBuild() {

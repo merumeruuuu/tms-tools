@@ -49,10 +49,15 @@
                             <div class="product-form-group" style="margin-top: 20px;">
                                 <label>Local URL Target *</label>
                                 <div class="input-group">
-                                    <input type="text" id="localUrl" placeholder="http://clientname-v7-x-x.local/" class="input-field">
+                                    <input type="text" id="localUrl" placeholder="client-v7-3-1 or http://client-v7-3-1.local/" class="input-field">
                                     <button id="detectBuildBtn" class="btn btn-primary">Detect</button>
                                 </div>
                                 <div id="urlError" class="error-message" style="display:none; color: #ef4444; font-size: 12px; margin-top:5px;"></div>
+                                <div id="buildSearchIndicator" class="build-search-indicator" role="status" aria-live="polite" hidden>
+                                    <span class="build-search-spinner" aria-hidden="true"></span>
+                                    <span id="buildSearchText">Searching build folders...</span>
+                                    <span class="build-search-track" aria-hidden="true"><span></span></span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -64,7 +69,7 @@
                             <div class="info-row"><label>Client Name:</label><span id="clientName" class="value"></span></div>
                             <div class="info-row"><label>Version:</label><span id="buildVersion" class="value"></span></div>
                             <div class="info-row"><label>Quarter:</label><span id="buildQuarter" class="value"></span></div>
-                            <div class="info-row"><label>Path in Linked Folder:</label><span id="buildPath" class="value monospace"></span></div>
+                            <div class="info-row"><label>Detected Project Path:</label><span id="buildPath" class="value monospace"></span></div>
                             <div class="info-row" style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
                                 <label>Next Seeder #:</label>
                                 <div class="seeder-num-control">
@@ -75,14 +80,14 @@
                             </div>
                             <div class="folder-link-row">
                                 <span id="folderLinkStatus" class="folder-link-status">Waiting to verify folder...</span>
-                                <button id="linkFolderBtn" class="btn btn-secondary btn-small" style="display:none;">🔗 Link WAMP Folder</button>
+                                <button id="grantBuildFolderBtn" class="btn btn-secondary btn-small" style="display:none;" title="Grant and remember access to the shared folder containing builds">Link Shared Build Folder</button>
                                 <button id="changeFolderBtn" class="btn btn-secondary btn-small" style="margin-left: 8px;">🔄 Switch Folder</button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="navigation-buttons">
-                    <button id="continueBtn" class="btn btn-primary" style="margin-left: auto;">Next →</button>
+                    <button id="continueBtn" class="btn btn-primary" style="margin-left: auto;" disabled>Next →</button>
                 </div>
             </section>
 
@@ -316,7 +321,13 @@
     <!-- Product Preview Modal -->
     <div id="previewModal" class="modal hidden">
         <div class="modal-content" style="max-width: 500px; text-align: left;">
-            <h3 id="previewTitle" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; color: #1e3a8a;">Product Preview</h3>
+            
+            <!-- HEADER WRAPPER -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 id="previewTitle" style="margin: 0; color: #1e3a8a;">Product Preview</h3>
+                <button id="dismissPreviewBtn" type="button" title="Close without saving" style="background: none; border: none; font-size: 24px; line-height: 1; padding: 0; color: #94a3b8; cursor: pointer;">&times;</button>
+            </div>
+            
             <div id="previewDetails" style="font-size: 13px; color: #0f172a; max-height: 60vh; overflow-y: auto;">
                 <!-- Product details will be injected here -->
             </div>
