@@ -722,28 +722,24 @@ class DataSeederApp {
                 }
             }
 
-            // NEW: Parse the Container Hierarchy Table
+            // NEW: Parse the Container Hierarchy Table (Strict Matching)
             const containerTypesRaw = getVal('Type of Container (Case, Carton, Bottle, Can, Packet)') || getVal('Type of Container');
             const barcodesRaw = extractedData['barcode'] || '';
             const quantitiesRaw = getVal('Number of Containers');
             const volumesRaw = getVal('Volume');
 
-            const parseMulti = (str) => str.trim().split(/\s+/).filter(Boolean);
-            
-            const formFactors = [];
-            const types = parseMulti(containerTypesRaw);
-            const barcodes = parseMulti(barcodesRaw);
-            const quantities = parseMulti(quantitiesRaw);
-            
-            // STRICT EXTRACTION: Only pull numbers from the volume row, ignoring "ml/g/oz"
-            const volumes = volumesRaw.match(/[\d.]+/g) || [];
+            // Safely extract only what we care about, ignoring 'n/a', labels, and spaces
+            const types = (containerTypesRaw.match(/(bottle|carton|can|case|packet|tetra)/gi) || []).map(s => s.toLowerCase());
+            const barcodes = barcodesRaw.match(/\d{5,}/g) || []; // Matches long numbers
+            const quantities = quantitiesRaw.match(/\d+(\.\d+)?/g) || [];
+            const volumes = volumesRaw.match(/\d+(\.\d+)?/g) || [];
 
-            // Loop based on the longest array to ensure we don't drop columns with missing data
+            const formFactors = [];
             const maxCols = Math.max(types.length, barcodes.length, quantities.length, volumes.length);
 
             for (let i = 0; i < maxCols; i++) {
                 let cid = ''; 
-                const typeLower = (types[i] || '').toLowerCase();
+                const typeLower = types[i] || '';
                 
                 if (typeLower.includes('bottle')) cid = '1';
                 else if (typeLower.includes('carton')) cid = '2';
@@ -754,17 +750,15 @@ class DataSeederApp {
 
                 const bc = barcodes[i] || '';
                 const qty = parseInt(quantities[i]) || (i === maxCols - 1 ? 1 : 0);
-                const vol = parseFloat(volumes[i]) || 0; // Cleanly parsed volume
+                const vol = parseFloat(volumes[i]) || 0;
 
                 if (bc || qty || vol || cid) {
                     formFactors.push({ containerId: cid, barcode: bc, quantity: qty, volume: vol });
                 }
             }
 
-            // Reverse the array so the innermost unit is at index 0
+            // Reverse so the innermost unit is at the top of the UI
             const hierarchy = formFactors.reverse();
-
-
 
             const product = {
                 action: 'create',
