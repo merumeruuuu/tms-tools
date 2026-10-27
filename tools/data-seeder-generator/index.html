@@ -25,6 +25,7 @@
                 <div class="step active" data-step="1"><div class="step-number">1</div><div class="step-label">Target Build</div></div>
                 <div class="step" data-step="2"><div class="step-number">2</div><div class="step-label">Add Products</div></div>
                 <div class="step" data-step="3"><div class="step-number">3</div><div class="step-label">Export Seeder</div></div>
+                
             </div>
 
             <!-- Step 1: Detect Build -->
@@ -75,6 +76,7 @@
                             <div class="folder-link-row">
                                 <span id="folderLinkStatus" class="folder-link-status">Waiting to verify folder...</span>
                                 <button id="linkFolderBtn" class="btn btn-secondary btn-small" style="display:none;">🔗 Link WAMP Folder</button>
+                                <button id="changeFolderBtn" class="btn btn-secondary btn-small" style="margin-left: 8px;">🔄 Switch Folder</button>
                             </div>
                         </div>
                     </div>
@@ -95,7 +97,7 @@
                             <div class="form-tabs">
                                 <!-- Inside your <div class="form-tabs"> -->
                                 <button type="button" class="form-tab-btn active" data-tab="manual" id="manualBtn">Manual Entry</button>
-                                <button type="button" class="form-tab-btn" data-tab="liveCatalog" id="liveCatalogBtn">Live Catalog</button> <!-- NEW TAB -->
+                                <button type="button" class="form-tab-btn" data-tab="liveCatalog" id="liveCatalogBtn">Products From TMNS</button> <!-- NEW TAB -->
                                 <button class="form-tab-btn" data-tab="doc">Doc Import</button>
                                 <button class="form-tab-btn" data-tab="csv">CSV Import</button>
                                 
@@ -103,12 +105,25 @@
                             <!-- Live Catalog Tab Content -->
 <div id="liveCatalog-tab" class="form-tab-content">
     <div class="product-form-group">
-        <label>Search External Formulary</label>
-        <div style="display: flex; gap: 10px;">
-            <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, or barcode..." style="flex: 1;">
-            <button id="apiSearchBtn" class="btn btn-primary" style="min-width: 100px;">Search</button>
-        </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <label style="margin: 0;">Search External Formulary <span id="apiTotalLoadedCount" style="color: #64748b; font-weight: normal; margin-left: 8px;"></span></label>
+        <button id="apiLoadCatalogBtn" class="btn btn-secondary btn-small" style="background: #f1f5f9; color: #0f172a; border-color: #cbd5e1;">
+            ⬇️ Load Products From TMNS
+        </button>
     </div>
+    <div style="display: flex; gap: 10px;">
+        <!-- Disabled by default until loaded -->
+        <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, or barcode..." style="flex: 1;" disabled>
+    </div>
+    
+    <!-- Progress Bar (Hidden by default) -->
+    <div id="apiLoadProgressWrapper" style="display: none; margin-top: 12px;">
+        <div style="background: #e2e8f0; border-radius: 4px; height: 8px; overflow: hidden; width: 100%;">
+            <div id="apiLoadProgressBar" style="width: 0%; height: 100%; background: #2563eb; transition: width 0.2s ease;"></div>
+        </div>
+        <div id="apiLoadProgressText" style="font-size: 11px; color: #64748b; margin-top: 4px; text-align: right;">0%</div>
+    </div>
+</div>
 
     <!-- Search Results Grid -->
     <div style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-top: 15px; display: flex; flex-direction: column; max-height: 400px;">
@@ -116,7 +131,7 @@
             <table class="products-preview-table" style="margin: 0; width: 100%;">
                 <thead style="position: sticky; top: 0; z-index: 10;">
                     <tr>
-                        <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllApiResults"></th>
+                        <th style="width: 40px; text-align: center;"></th>
                         <th>Product Details</th>
                         <th>Packaging</th>
                     </tr>
@@ -141,7 +156,8 @@
                                     <label>Action Type *</label>
                                     <select id="actionType" class="input-field">
                                         <option value="">Select an action...</option>
-                                        <option value="create">Add New Product</option>
+                                        <option value="create">Add New Products</option>
+                                        <option value="add-form-factor">Add Form Factor</option>
                                         <option value="update" >Update Product</option>
                                         <option value="barcode-update" >Fix Barcode</option>
                                     </select>
@@ -313,6 +329,7 @@
     <script src="js/seeder-generator.js"></script>
     <script src="js/csv-handler.js"></script>
     <script src="js/fs-access.js"></script>
+    <script src="js/idb-keyval.js"></script>
     <script src="js/app.js"></script>
     <script src="js/constants.js"></script>
     <script src="js/templates/q3-template.js"></script>
