@@ -288,7 +288,11 @@ class DataSeederApp {
 
         // --- DYNAMICALLY SHOW ONLY WHAT IS NEEDED ---
         let orderedKeys = [];
-        if (product.action === 'add-form-factor') {
+        if (product.action === 'add-unit') {
+            orderedKeys = ['action', 'unitName', 'unitADT', 'unitOrder', 'bmMaxVolume', 'formulaMaxVolume', 'waterMaxVolume', 'bmPrepCycle', 'formulaPrepCycle'];
+        } else if (product.action === 'add-manufacturer') {
+            orderedKeys = ['action', 'manufacturerName', 'manufacturerDescription'];
+        } else if (product.action === 'add-form-factor') {
             orderedKeys = ['action', 'productName', 'productCode'];
         } else if (product.action === 'barcode-update') {
             orderedKeys = ['action', 'productName', 'oldProductCode', 'newProductCode'];
@@ -307,8 +311,9 @@ class DataSeederApp {
         }
 
         const detailsContainer = document.getElementById('previewDetails');
-        let html = '';
-        
+        let html = '<div class="tmnp-product-form"><div class="tmnp-product-columns">';
+        const fieldMarkup = {};
+
         for (const key of orderedKeys) {
             let value = product[key] !== undefined && product[key] !== null ? product[key] : '';
             
@@ -321,14 +326,12 @@ class DataSeederApp {
             if (key === 'hl7Fortifier') formattedLabel = 'Fortifier HL7 Reference';
 
             const isMissing = (value === '');
-            const highlightStyle = isMissing 
-                ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5); border-radius: 4px;' 
-                : '';
+            const missingClass = isMissing ? ' is-missing' : '';
 
             let inputHtml = '';
             
             if (mappings[key]) {
-                inputHtml = `<select class="preview-input" data-key="${key}" style="${highlightStyle}">`;
+                inputHtml = `<select class="preview-input${missingClass}" data-key="${key}">`;
                 if (isMissing) {
                     inputHtml += `<option value="" selected disabled>Select...</option>`;
                 }
@@ -343,37 +346,58 @@ class DataSeederApp {
                 const step = isNumber ? 'any' : '';
                 const safeValue = value.toString().replace(/"/g, '&quot;'); 
                 
-                inputHtml = `<input type="${type}" step="${step}" class="preview-input" data-key="${key}" value="${safeValue}" placeholder="(Blank)" style="${highlightStyle}">`;
+                inputHtml = `<input type="${type}" step="${step}" class="preview-input${missingClass}" data-key="${key}" value="${safeValue}" placeholder="(Blank)">`;
             }
 
-            html += `
-                <div class="preview-grid">
-                    <div class="preview-label">${formattedLabel}</div>
-                    <div class="preview-value" style="padding: 2px 0;">${inputHtml}</div>
-                </div>
-            `;
+            fieldMarkup[key] = `<label class="tmnp-field"><span class="preview-label">${formattedLabel}</span>${inputHtml}</label>`;
         }
+
+        const leftKeys = product.action === 'create'
+            ? ['action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode', 'hl7Reference', 'hl7Fortifier']
+            : orderedKeys.filter((_, index) => index % 2 === 0);
+        const rightKeys = product.action === 'create'
+            ? ['productType', 'productUse', 'categoryId', 'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit']
+            : orderedKeys.filter((_, index) => index % 2 !== 0);
+
+        for (const key of leftKeys) {
+            if (fieldMarkup[key]) html += fieldMarkup[key];
+        }
+        html += '</div><div class="tmnp-product-column">';
+        for (const key of rightKeys) {
+            if (fieldMarkup[key]) html += fieldMarkup[key];
+        }
+        html += '</div></div>';
 
         // --- ONLY SHOW HIERARCHY TABLE FOR CREATE AND ADD-FORM-FACTOR ---
         if (product.action === 'create' || product.action === 'add-form-factor') {
             html += `
-            <div style="margin-top: 25px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden;">
-                <div style="background: #f8fafc; padding: 10px 15px; border-bottom: 1px solid #e2e8f0; display: flex; font-size: 13px; color: #334155;">
-                    <div style="flex: 1;"><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
-                    <div style="flex: 2;"><strong>Item Name:</strong> ${product.productName}</div>
-                </div>
-                
-                <div style="padding: 15px;">
-                    <div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Form Factor(s)</div>
+            <section class="tmnp-packaging-section">
+                <h4 class="tmnp-section-heading">Form Factor Types</h4>
+                <div class="tmnp-hierarchy-card">
+                    <div class="tmnp-product-summary">
+                        <div><strong>Item Number:</strong> ${product.productCode || 'Auto-Generated'}</div>
+                        <div><strong>Item Name:</strong> ${product.productName || ''}</div>
+                    </div>
+                    <div class="tmnp-hierarchy-content">
+                        <div class="tmnp-hierarchy-title">Form Factor(s)</div>
             `;
             
-            product.hierarchy.forEach((ff, i) => {
-                const isMissing = !ff.containerId;
-                const highlightStyle = isMissing 
-                    ? 'background: #fef08a; border: 2px solid #eab308; outline: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);' 
-                    : '';
+            const displayHierarchy = product.hierarchy
+                .map((formFactor, storageIndex) => ({ formFactor, storageIndex }))
+                .reverse();
 
-                let typeSelect = `<select class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="containerId" style="width: auto; font-weight: bold; color: #0f172a; cursor: pointer; padding: 2px 4px; height: auto; ${highlightStyle}">`;
+            displayHierarchy.forEach(({ formFactor: ff, storageIndex }, displayIndex) => {
+                const isMissing = !ff.containerId;
+                const missingClass = isMissing ? ' is-missing' : '';
+                const hierarchyLabel = displayHierarchy.length === 1
+                    ? 'Single Container'
+                    : displayIndex === 0
+                        ? 'Outer Container'
+                        : displayIndex === displayHierarchy.length - 1
+                            ? 'Smallest Unit'
+                            : 'Nested Container';
+
+                let typeSelect = `<select class="preview-input hierarchy-input${missingClass}" data-hierarchy-index="${storageIndex}" data-key="containerId">`;
                 
                 if (isMissing) typeSelect += `<option value="" selected disabled>Select Type...</option>`;
                 
@@ -383,37 +407,34 @@ class DataSeederApp {
                 }
                 typeSelect += `</select>`;
 
-                const removeBtn = product.hierarchy.length > 1 
-                    ? `<button type="button" class="remove-preview-ff-btn" data-index="${i}" title="Remove Container" style="background:none; border:none; color:#ef4444; font-size:18px; font-weight:bold; cursor:pointer; margin-left: 6px; padding: 0 4px; line-height: 1;">&times;</button>`
-                    : `<span style="width: 20px; margin-left: 6px;"></span>`;
+                const removeBtn = product.hierarchy.length > 1
+                    ? `<button type="button" class="remove-preview-ff-btn" data-index="${storageIndex}" title="Remove Container">&times;</button>`
+                    : '<span class="tmnp-remove-placeholder"></span>';
 
                 html += `
-                    <div style="background: #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; font-size: 13px; color: #0f172a; overflow-x: auto;">
-                        ${typeSelect}
-                        
-                        <span style="font-weight: bold; color: #334155; margin-left: 2px;">[</span>
-                        <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode" style="width: 100px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto; font-family: monospace;">
-                        <span style="font-weight: bold; color: #334155;">]</span>
-                        
-                        <span style="font-weight: bold; color: #334155; margin-left: 2px;">(</span>
-                        <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="quantity" value="${ff.quantity}" style="width: 40px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;" title="Quantity">
-                        <span style="font-weight: bold; color: #334155;">)</span>
-                        
-                        <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-                            <span style="color: #475569; font-size: 12px; font-weight: bold;">Vol:</span>
-                            <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${i}" data-key="volume" value="${ff.volume}" style="width: 55px; background: rgba(255,255,255,0.6); padding: 2px 6px; height: auto;">
+                    <div class="tmnp-hierarchy-row${displayIndex === 0 ? ' is-outer' : ''}${displayIndex === displayHierarchy.length - 1 ? ' is-smallest' : ''}" style="--hierarchy-depth: ${displayIndex};">
+                        <label class="tmnp-hierarchy-type"><span>${hierarchyLabel}</span>${typeSelect}</label>
+                        <label class="tmnp-inline-field tmnp-barcode-field"><span>Barcode</span>
+                            <input type="text" class="preview-input hierarchy-input" data-hierarchy-index="${storageIndex}" data-key="barcode" value="${(ff.barcode || '').replace(/"/g, '&quot;')}" placeholder="Barcode">
+                        </label>
+                        <label class="tmnp-inline-field tmnp-quantity-field"><span>Qty</span>
+                            <input type="number" class="preview-input hierarchy-input" data-hierarchy-index="${storageIndex}" data-key="quantity" value="${ff.quantity}" title="Quantity">
+                        </label>
+                        <label class="tmnp-inline-field tmnp-volume-field"><span>Volume</span>
+                            <input type="number" step="any" class="preview-input hierarchy-input" data-hierarchy-index="${storageIndex}" data-key="volume" value="${ff.volume}">
+                        </label>
+                        <div class="tmnp-remove-control">
+                            ${removeBtn}
                         </div>
-                        ${removeBtn}
                     </div>
                 `;
             });
 
             html += `
-                    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-                        <button type="button" class="btn btn-secondary btn-small" id="addPreviewContainerBtn" style="background: #f1f5f9; border: 1px dashed #94a3b8; color: #475569;">+ Add Outer Container</button>
-                    </div>
+                    <button type="button" class="tmnp-add-container-btn" id="addPreviewContainerBtn">+ Add Outer Container</button>
                 </div>
-            </div>`;
+            </div>
+            </section>`;
         }
 
         document.getElementById('previewTitle').textContent = `Edit: ${product.productName || 'Product'}`;
@@ -639,7 +660,10 @@ class DataSeederApp {
             };
 
             const rawName = getVal('Display Name');
-            const rawItemNum = getVal('Item Number');
+            const rawItemNumText = getVal('Item Number');
+            const itemNumberMatch = rawItemNumText.match(/\bwhich\s+is\s+([A-Z0-9][A-Z0-9-]*)\b/i)
+                || rawItemNumText.match(/\b(?:item\s+)?number\s*(?:is|:)\s*([A-Z0-9][A-Z0-9-]*)\b/i);
+            const rawItemNum = itemNumberMatch ? itemNumberMatch[1] : rawItemNumText;
             const rawMfg = getVal('Manufacturer');
             const rawType = getVal('Product Type');
             const rawUse = getVal('Product Use');
@@ -862,7 +886,7 @@ class DataSeederApp {
                             productUse: 'base',
                             categoryId: '3',
                             caloricValue: calValue,
-                            displacement: parseFloat(basicData.Displacement) || 1.0,
+                            displacement: parseFloat(basicData.Displacement) || 0,
                             expirationOpened: 48,
                             expirationPrepared: 48,
                             measurementUnit: 'ml',
@@ -1608,6 +1632,28 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
                 { type: 'section', label: 'New Packaging Hierarchy' },
                 { name: 'hierarchy', label: 'Packaging Hierarchy (Top = Innermost Unit)', type: 'packaging-hierarchy' }
+            ],
+            // --- NEW MODULE: ADD MANUFACTURER ---
+            'add-manufacturer': [
+                { type: 'section', label: 'Manufacturer Details' },
+                { name: 'manufacturerName', label: 'Manufacturer Name (Max 20 chars) *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Abbott' },
+                { name: 'manufacturerDescription', label: 'Full Description *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Abbott Nutrition' }
+            ],
+            // --- NEW MODULE: ADD UNIT ---
+            'add-unit': [
+                { type: 'section', label: 'Unit Identification' },
+                { name: 'unitName', label: 'Unit Name *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Timeless1NICU' },
+                { name: 'unitADT', label: 'Unit ADT Reference *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Timeless1NICU' },
+                
+                { type: 'section', label: 'Batch Settings' },
+                { name: 'bmMaxVolume', label: 'Breastmilk Batch Max Volume', type: 'number', value: 0, numeric: true },
+                { name: 'formulaMaxVolume', label: 'Formula Batch Max Volume', type: 'number', value: 900, numeric: true },
+                { name: 'waterMaxVolume', label: 'Sterile Water Batch Max Volume', type: 'number', value: 900, numeric: true },
+                
+                { type: 'section', label: 'Prep Cycles & Settings' },
+                { name: 'bmPrepCycle', label: 'Breastmilk Prep Cycle (Hours)', type: 'number', value: 24, numeric: true },
+                { name: 'formulaPrepCycle', label: 'Formula Prep Cycle (Hours)', type: 'number', value: 24, numeric: true },
+                { name: 'unitOrder', label: 'Unit Order', type: 'number', value: 1, numeric: true }
             ]
         };
         return fields[actionType] || [];
@@ -1955,8 +2001,20 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             }
         });
 
-        if (!data.productName) {
+        // Require Product Name for everything EXCEPT Manufacturers and Units
+        if (actionType !== 'add-manufacturer' && actionType !== 'add-unit' && !data.productName) {
             this.showStatus('Display Name is required', 'error');
+            return null;
+        }
+
+        // Require Manufacturer Name specifically for the new module
+        if (actionType === 'add-manufacturer' && !data.manufacturerName) {
+            this.showStatus('Manufacturer Name is required', 'error');
+            return null;
+        }
+        // Require Unit Name specifically for the Unit module
+        if (actionType === 'add-unit' && !data.unitName) {
+            this.showStatus('Unit Name is required', 'error');
             return null;
         }
 

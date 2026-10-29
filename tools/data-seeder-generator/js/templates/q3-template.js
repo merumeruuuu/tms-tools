@@ -11,6 +11,8 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
     const updates = products.filter(p => p.action === 'update');
     const barcodeUpdates = products.filter(p => p.action === 'barcode-update');
     const formFactorAdditions = products.filter(p => p.action === 'add-form-factor');
+    const manufacturers = products.filter(p => p.action === 'add-manufacturer');
+    const units = products.filter(p => p.action === 'add-unit');
 
     // ==========================================
     // BLOCK 1: CREATE PRODUCTS
@@ -56,7 +58,7 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                 'unitName' => '${product.measurementUnit || 'ml'}',
                 'expirationOpened' => ${product.expirationOpened || 48},
                 'caloricValue' => ${product.caloricValue || 20},
-                'displacement' => ${product.displacement || 1.00},
+                'displacement' => ${product.displacement || 0.00},
                 'canBeBase' => ${canBeBase},
                 'canBeFortifier' => ${canBeFortifier},
                 'canBeModular' => ${canBeModular},
@@ -445,6 +447,92 @@ ${addFfData}
             }
             
             $this->command->info("-> Attached new item $itemBarcode to product $productName.");
+        }\n`;
+    }
+    // ==========================================
+    // BLOCK 5: ADD MANUFACTURER
+    // ==========================================
+    if (manufacturers.length > 0) {
+        let mfgData = manufacturers.map(m => {
+            return `            ['name' => '${(m.manufacturerName || '').replace(/'/g, "\\'")}', 'description' => '${(m.manufacturerDescription || '').replace(/'/g, "\\'")}']`;
+        }).join(',\n');
+
+        operationCode += `
+        // ---------------------------------------------------------
+        // ADD NEW MANUFACTURERS
+        // ---------------------------------------------------------
+        $addManufacturers = [
+${mfgData}
+        ];
+
+        foreach ($addManufacturers as $m) {
+            $exists = DB::table('nutrition_product_types_manufacturer')
+                ->where('ManufacturerName', $m['name'])
+                ->orWhere('ManufacturerDescription', $m['description'])
+                ->exists();
+                
+            if (!$exists) {
+                DB::table('nutrition_product_types_manufacturer')->insert([
+                    'ManufacturerName' => substr($m['name'], 0, 20),
+                    'ManufacturerDescription' => $m['description'],
+                    'ManufacturerStatus' => 1,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now()
+                ]);
+                $this->command->info("-> Added new Manufacturer: " . $m['name']);
+            } else {
+                $this->command->warn("-> Skipped: Manufacturer " . $m['name'] . " already exists.");
+            }
+        }\n`;
+    }
+    // ==========================================
+    // BLOCK 6: ADD UNITS
+    // ==========================================
+    if (units.length > 0) {
+        let unitData = units.map(u => {
+            return `            [
+                'name' => '${(u.unitName || '').replace(/'/g, "\\'")}', 
+                'adt' => '${(u.unitADT || '').replace(/'/g, "\\'")}',
+                'order' => ${u.unitOrder || 1},
+                'bmVol' => ${u.bmMaxVolume || 0},
+                'formVol' => ${u.formulaMaxVolume || 0},
+                'waterVol' => ${u.waterMaxVolume || 0},
+                'bmCycle' => ${u.bmPrepCycle || 24},
+                'formCycle' => ${u.formulaPrepCycle || 24}
+            ]`;
+        }).join(',\n');
+
+        operationCode += `
+        // ---------------------------------------------------------
+        // ADD NEW UNITS
+        // ---------------------------------------------------------
+        $addUnits = [
+${unitData}
+        ];
+
+        foreach ($addUnits as $u) {
+            $exists = DB::table('units')->where('unitName', $u['name'])->exists();
+                
+            if (!$exists) {
+                DB::table('units')->insert([
+                    'unitName' => $u['name'],
+                    'unitADTReference' => $u['adt'],
+                    'unitOrder' => $u['order'],
+                    'unitCanReceiveDonorMilk' => 1,
+                    'unitHospital' => 1,
+                    'unitHoursOfFeedsPrepared' => $u['bmCycle'],
+                    'unitHoursOfFeedsPreparedFormula' => $u['formCycle'],
+                    'unitBatchVolumeBreastmilk' => $u['bmVol'],
+                    'unitBatchVolumeFormula' => $u['formVol'],
+                    'unitBatchVolumeSterileWater' => $u['waterVol'],
+                    'unitActive' => 1,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now()
+                ]);
+                $this->command->info("-> Added new Unit: " . $u['name']);
+            } else {
+                $this->command->warn("-> Skipped: Unit " . $u['name'] . " already exists.");
+            }
         }\n`;
     }
     return `<?php

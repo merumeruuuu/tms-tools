@@ -241,7 +241,7 @@ class CsvHandler {
                 productUse: productUse,
                 categoryId: catId,
                 caloricValue: parseFloat(getVal('Base Caloric Value')) || 20,
-                displacement: parseFloat(getVal('Displacement')) || 1.0,
+                displacement: parseFloat(getVal('Displacement')) || 0,
                 expirationOpened: parseInt(getVal('Open Expiration Date (Hours)')) || 48,
                 expirationPrepared: parseInt(getVal('Expiration Hour (after Prepare)')) || 48,
                 containerType: containerId,
