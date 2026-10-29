@@ -238,7 +238,14 @@
                     
                     <!-- Left Panel: Code Preview -->
                     <div class="panel">
-                        <div class="panel-header">Generated Seeder</div>
+                        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Generated Code</span>
+                <div id="outputTabs" style="display: flex; gap: 8px; font-family: system-ui, -apple-system, sans-serif;">
+                    <button type="button" class="btn btn-primary btn-small output-tab" data-format="php-v7" style="padding: 4px 10px; font-size: 12px;">Laravel (v7)</button>
+                    <button type="button" class="btn btn-secondary btn-small output-tab" data-format="sql-v7" style="padding: 4px 10px; font-size: 12px;">Raw SQL (v7)</button>
+                    <button type="button" class="btn btn-secondary btn-small output-tab" data-format="sql-v6" style="padding: 4px 10px; font-size: 12px;">Raw SQL (v6)</button>
+                </div>
+            </div>
                         <div class="panel-body" style="padding:0;">
                             <div class="code-block"><pre><code id="seederPreview"></code></pre></div>
                         </div>
@@ -343,7 +350,9 @@
     <script src="js/app.js"></script>
     <script src="js/constants.js"></script>
     <script src="js/templates/q3-template.js"></script>
-    <script src="js/api-service.js"></script> <!-- Add this line -->
+    <script src="js/api-service.js"></script> 
+    <script src="js/templates/v6-sql-template.js"></script>
+    <script src="js/templates/v7-sql-template.js"></script>
 </body>
     
 </body>

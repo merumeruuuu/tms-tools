@@ -834,6 +834,21 @@ class DataSeederApp {
         document.getElementById('stageSelectedApiBtn').disabled = checked === 0;
     }
     setupEventListeners() {
+        // Output Tabs logic
+        document.querySelectorAll('.output-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                // Update active button styling
+                document.querySelectorAll('.output-tab').forEach(btn => {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-secondary');
+                });
+                e.target.classList.remove('btn-secondary');
+                e.target.classList.add('btn-primary');
+                
+                // Switch the content instantly
+                this.switchOutputFormat(e.target.dataset.format);
+            });
+        });
         document.getElementById('dismissPreviewBtn').addEventListener('click', () => {
             // Simply hide the modal without calling savePreviewChanges()
             document.getElementById('previewModal').classList.add('hidden');
@@ -2215,23 +2230,68 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         
         this.seederNumber = currentNum;
 
-        try {
-            const config = {
-                seederNumber: this.seederNumber,
-                quarter: this.buildInfo.quarter,
-                actionType: this.currentAction,
-                products: this.products,
-                buildInfo: this.buildInfo
-            };
+        // Store config for on-the-fly conversion
+        this.lastSeederConfig = {
+            seederNumber: this.seederNumber,
+            quarter: this.buildInfo ? this.buildInfo.quarter : 'Q4',
+            actionType: this.currentAction,
+            products: this.products,
+            buildInfo: this.buildInfo
+        };
 
-            this.generatedSeeder = seederGenerator.generateSeeder(config);
+        // Reset tabs to default (PHP v7)
+        const tabs = document.querySelectorAll('.output-tab');
+        if (tabs.length > 0) {
+            tabs.forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            document.querySelector('.output-tab[data-format="php-v7"]').classList.remove('btn-secondary');
+            document.querySelector('.output-tab[data-format="php-v7"]').classList.add('btn-primary');
+        }
+
+        this.switchOutputFormat('php-v7');
+        this.showOutput(true);
+    }
+    switchOutputFormat(format) {
+        if (!this.lastSeederConfig) return;
+        
+        try {
+            // 1. Generate the correct code
+            if (format === 'sql-v6') {
+                this.generatedSeeder = window.SeederTemplates.SQL_V6(this.lastSeederConfig.products);
+            } else if (format === 'sql-v7') {
+                this.generatedSeeder = window.SeederTemplates.SQL_V7(this.lastSeederConfig.products);
+            } else {
+                const className = `UpdateClientData${this.lastSeederConfig.seederNumber}`;
+                this.generatedSeeder = window.SeederTemplates.Q3(className, this.lastSeederConfig.products, this.lastSeederConfig.actionType, this.lastSeederConfig.buildInfo);
+            }
             document.getElementById('seederPreview').textContent = this.generatedSeeder;
-            this.showOutput(true);
+
+            // 2. Toggle Auto-Write Availability
+            const autoWriteWrapper = document.getElementById('autoWriteWrapper');
+            const outputAutoWrite = document.getElementById('outputAutoWrite');
+            const outputDownload = document.getElementById('outputDownload');
+            
+            if (format.startsWith('sql')) {
+                // Hide Auto-Write for SQL tabs
+                if (autoWriteWrapper) autoWriteWrapper.style.display = 'none';
+                
+                // If Auto-Write was checked, forcefully switch them back to Download
+                if (outputAutoWrite && outputAutoWrite.checked && outputDownload) {
+                    outputDownload.checked = true;
+                }
+            } else {
+                // Restore Auto-Write for Laravel Seeder (ONLY if a folder is successfully linked)
+                if (this.seedersDirHandle && autoWriteWrapper) {
+                    autoWriteWrapper.style.display = 'flex';
+                }
+            }
+
         } catch (error) {
-            this.showStatus(`Generation error: ${error.message}`, 'error');
+            this.showStatus(`Conversion error: ${error.message}`, 'error');
         }
     }
-
     showOutput(show) {
         if (show) {
             this.goToStep(3); // Updated to point to step-3 panel
@@ -2251,7 +2311,13 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
     async executeOutput() {
         const method = document.querySelector('input[name="output"]:checked').value;
-        const fileName = `DATA${this.seederNumber}.php`;
+        
+        // Determine file extension based on active tab
+        const activeTab = document.querySelector('.output-tab.btn-primary');
+        const format = activeTab ? activeTab.dataset.format : 'php-v7';
+        const extension = format.startsWith('sql') ? 'sql' : 'php';
+        
+        const fileName = `DATA${this.seederNumber}.${extension}`;
 
         if (method === 'download') {
             this.downloadSeeder(fileName);
