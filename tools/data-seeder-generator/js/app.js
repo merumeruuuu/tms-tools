@@ -5,17 +5,64 @@
 
 const UPDATE_FIELD_DEFINITIONS = [
     { value: 'manufacturer', label: 'Manufacturer', type: 'select', placeholder: 'Select a manufacturer...', icon: '🏢', theme: 'blue', options: [
-        { value: 'Abbott Nutrition', label: 'Abbott Nutrition' },
+        { value: 'Cera Products', label: 'Cera Products' },
+        { value: 'Gerber', label: 'Gerber' },
+        { value: 'Medolac Laboratories', label: 'Medolac Laboratories' },
         { value: 'Mead Johnson Nutrition', label: 'Mead Johnson Nutrition' },
-        { value: 'Nestle Health Science', label: 'Nestle Health Science' },
+        { value: 'Natures One', label: 'Natures One' },
         { value: 'Nutricia', label: 'Nutricia' },
-        { value: 'Reckitt', label: 'Reckitt' },
-        { value: 'Danone', label: 'Danone' },
-        { value: 'Kate Farms', label: 'Kate Farms' },
-        { value: 'Fresenius Kabi', label: 'Fresenius Kabi' },
+        { value: 'Prolacta Bioscience', label: 'Prolacta Bioscience' },
         { value: 'Baxter', label: 'Baxter' },
-        { value: 'B. Braun', label: 'B. Braun' },
-        { value: '__other__', label: 'Other' }
+        { value: 'Abbott', label: 'Abbott' },
+        { value: 'UNDEFINED', label: 'UNDEFINED' },
+        { value: 'Perrigo', label: 'Perrigo' },
+        { value: 'Bobbie', label: 'Bobbie' },
+        { value: 'NI-Q', label: 'NI-Q' },
+        { value: 'Kate Farms', label: 'Kate Farms' },
+        { value: 'Vitaflo', label: 'Vitaflo' },
+        { value: 'HiPP', label: 'HiPP' },
+        { value: 'Holle', label: 'Holle' },
+        { value: 'Kendamil', label: 'Kendamil' },
+        { value: 'ByHeart', label: 'ByHeart' },
+        { value: 'Functional Formularies', label: 'Functional Formularies' },
+        { value: 'Nestle', label: 'Nestle' },
+        { value: 'ICU Medical', label: 'ICU Medical' },
+        { value: 'Pfizer', label: 'Pfizer' },
+        { value: 'Fresenius Kabi', label: 'Fresenius Kabi' },
+        { value: 'B Braun', label: 'B Braun' },
+        { value: 'American Regent', label: 'American Regent' },
+        { value: "Dr.Brown's", label: "Dr.Brown's" },
+        { value: 'Parapharmatech', label: 'Parapharmatech' },
+        { value: 'Jo Mar Labs', label: 'Jo Mar Labs' },
+        { value: 'Cambrooke', label: 'Cambrooke' },
+        { value: 'Simply Thick', label: 'Simply Thick' },
+        { value: "Baby's Only", label: "Baby's Only" },
+        { value: "Earth's Best Organic", label: "Earth's Best Organic" },
+        { value: 'Orgain', label: 'Orgain' },
+        { value: 'Kabrita', label: 'Kabrita' },
+        { value: 'Happy Family Organics', label: 'Happy Family Organics' },
+        { value: 'Reason Health', label: 'Reason Health' },
+        { value: 'Kraft Heinz', label: 'Kraft Heinz' },
+        { value: 'Else Nutrition', label: 'Else Nutrition' },
+        { value: "Aussie Bub's", label: "Aussie Bub's" },
+        { value: 'Medtrition', label: 'Medtrition' },
+        { value: 'Whole Story Meals Inc', label: 'Whole Story Meals Inc' },
+        { value: 'Solace Nutrition', label: 'Solace Nutrition' },
+        { value: 'Llorens Pharmaceutical', label: 'Llorens Pharmaceutical' },
+        { value: 'Sprout Organic', label: 'Sprout Organic' },
+        { value: 'Lyons Health Labs', label: 'Lyons Health Labs' },
+        { value: 'Kent Precision Foods Group', label: 'Kent Precision Foods Group' },
+        { value: 'Unjury', label: 'Unjury' },
+        { value: 'A2 Milk Company', label: 'A2 Milk Company' },
+        { value: 'Damira', label: 'Damira' },
+        { value: 'Delical', label: 'Delical' },
+        { value: 'Drasanvi', label: 'Drasanvi' },
+        { value: 'Grifols', label: 'Grifols' },
+        { value: 'Novolac', label: 'Novolac' },
+        { value: 'Nutrisens', label: 'Nutrisens' },
+        { value: 'Nara Organics', label: 'Nara Organics' },
+        { value: 'OWYN', label: 'OWYN' },
+        { value: '__other__', label: 'Other (enter manufacturer)' }
     ]},
     { value: 'shortName', label: 'Short Name', type: 'text', placeholder: 'e.g., Similac', icon: '📝', theme: 'blue' },
     { value: 'hl7Reference', label: 'HL7 Reference', type: 'text', placeholder: 'e.g., MLT-17', icon: '🔌', theme: 'purple' },
@@ -1574,7 +1621,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const fields = {
             'create': [
                 { type: 'section', label: 'General Information' },
-                { name: 'manufacturer', label: 'Manufacturer', type: 'text', placeholder: 'e.g., Abbott Nutrition' },
+                { name: 'manufacturer', label: 'Manufacturer', type: 'select', placeholder: 'Select a manufacturer...', options: UPDATE_FIELD_DEFINITIONS.find(field => field.value === 'manufacturer').options },
                 { name: 'productName', label: 'Display Name *', type: 'text', required: true },
                 { name: 'shortName', label: 'Short Name', type: 'text' },
                 { name: 'productCode', label: 'Item Number', type: 'text' },
@@ -1675,15 +1722,17 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
     }
     addHierarchyRow(container, isInner = false, prepend = false) {
         const row = document.createElement('div');
-        row.className = 'hierarchy-row';
-        row.style.display = 'flex';
-        row.style.gap = '6px';
-        row.style.alignItems = 'center';
+        row.className = `hierarchy-row manual-hierarchy-row${isInner ? ' is-smallest' : ''}`;
+
+        const typeGroup = document.createElement('label');
+        typeGroup.className = 'manual-hierarchy-field manual-hierarchy-container';
+        const levelLabel = document.createElement('span');
+        levelLabel.className = 'manual-hierarchy-level';
+        typeGroup.appendChild(levelLabel);
 
         const typeSel = document.createElement('select');
         typeSel.className = 'hierarchy-type input-field';
-        typeSel.style.flex = '2';
-        typeSel.style.padding = '8px 6px';
+        typeSel.setAttribute('aria-label', 'Container type');
         typeSel.innerHTML = `
             <option value="1">Bottle</option>
             <option value="2">Carton</option>
@@ -1694,49 +1743,81 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         `;
         if (!isInner) typeSel.value = '4'; // Default to Case for outer containers
 
+        typeGroup.appendChild(typeSel);
+
+        const bcGroup = document.createElement('label');
+        bcGroup.className = 'manual-hierarchy-field manual-hierarchy-barcode';
+        const bcLabel = document.createElement('span');
+        bcLabel.textContent = 'Barcode';
+        bcGroup.appendChild(bcLabel);
         const bcIn = document.createElement('input');
         bcIn.type = 'text';
         bcIn.className = 'hierarchy-bc input-field';
         bcIn.placeholder = 'Barcode';
-        bcIn.style.flex = '3';
-        bcIn.style.padding = '8px 6px';
+        bcIn.setAttribute('aria-label', 'Barcode');
+        bcGroup.appendChild(bcIn);
 
+        const qtyGroup = document.createElement('label');
+        qtyGroup.className = 'manual-hierarchy-field manual-hierarchy-quantity';
+        const qtyLabel = document.createElement('span');
+        qtyLabel.textContent = 'Quantity';
+        qtyGroup.appendChild(qtyLabel);
         const qtyIn = document.createElement('input');
         qtyIn.type = 'number';
         qtyIn.className = 'hierarchy-qty input-field';
         qtyIn.placeholder = 'Qty';
         qtyIn.value = isInner ? '1' : '';
-        qtyIn.style.flex = '1.2';
-        qtyIn.style.padding = '8px 6px';
+        qtyIn.setAttribute('aria-label', 'Quantity');
+        qtyGroup.appendChild(qtyIn);
 
+        const volGroup = document.createElement('label');
+        volGroup.className = 'manual-hierarchy-field manual-hierarchy-volume';
+        const volLabel = document.createElement('span');
+        volLabel.textContent = 'Volume';
+        volGroup.appendChild(volLabel);
         const volIn = document.createElement('input');
         volIn.type = 'number';
         volIn.step = 'any';
         volIn.className = 'hierarchy-vol input-field';
         volIn.placeholder = 'Vol';
-        volIn.style.flex = '1.2';
-        volIn.style.padding = '8px 6px';
+        volIn.setAttribute('aria-label', 'Volume');
+        volGroup.appendChild(volIn);
 
-        row.appendChild(typeSel);
-        row.appendChild(bcIn);
-        row.appendChild(qtyIn);
-        row.appendChild(volIn);
+        row.append(typeGroup, bcGroup, qtyGroup, volGroup);
 
         if (!isInner) {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
+            removeBtn.className = 'manual-hierarchy-remove';
             removeBtn.innerHTML = '×';
-            removeBtn.style.cssText = 'background:none; border:none; color:#ef4444; cursor:pointer; font-size:20px; font-weight:bold; padding:0 4px;';
-            removeBtn.onclick = () => row.remove();
+            removeBtn.title = 'Remove container';
+            removeBtn.setAttribute('aria-label', 'Remove container');
+            removeBtn.onclick = () => {
+                row.remove();
+                this.updateHierarchyRowLabels(container);
+            };
             row.appendChild(removeBtn);
-        } else {
-            const spacer = document.createElement('div');
-            spacer.style.width = '24px';
-            row.appendChild(spacer);
         }
 
         if (prepend) container.insertBefore(row, container.firstChild);
         else container.appendChild(row);
+        this.updateHierarchyRowLabels(container);
+    }
+
+    updateHierarchyRowLabels(container) {
+        const rows = Array.from(container.querySelectorAll('.manual-hierarchy-row'));
+        rows.forEach((row, index) => {
+            const isOuter = rows.length > 1 && index === 0;
+            const isSmallest = index === rows.length - 1;
+            row.classList.toggle('is-outer', isOuter);
+            row.classList.toggle('is-nested', !isOuter && !isSmallest);
+            row.classList.toggle('is-smallest', isSmallest);
+            row.querySelector('.manual-hierarchy-level').textContent = isOuter
+                ? 'Outer Container'
+                : isSmallest
+                    ? 'Smallest Unit'
+                    : 'Nested Container';
+        });
     }
     createFormField(field) {
         if (field.type === 'section') {
@@ -1762,6 +1843,15 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             select.dataset.fieldName = field.name;
             if (field.required) select.required = true;
 
+            if (field.placeholder) {
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = field.placeholder;
+                placeholder.disabled = true;
+                placeholder.selected = true;
+                select.appendChild(placeholder);
+            }
+
             field.options.forEach(opt => {
                 const option = document.createElement('option');
                 option.value = opt.value;
@@ -1771,6 +1861,24 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             });
 
             group.appendChild(select);
+
+            if (field.name === 'manufacturer') {
+                const otherGroup = document.createElement('div');
+                otherGroup.className = 'manufacturer-other-field hidden';
+                const otherInput = document.createElement('input');
+                otherInput.type = 'text';
+                otherInput.dataset.fieldName = 'manufacturerOther';
+                otherInput.placeholder = 'Enter manufacturer name';
+                otherInput.autocomplete = 'organization';
+                otherGroup.appendChild(otherInput);
+                group.appendChild(otherGroup);
+
+                select.addEventListener('change', () => {
+                    otherGroup.classList.toggle('hidden', select.value !== '__other__');
+                    if (select.value !== '__other__') otherInput.value = '';
+                });
+            }
+
             return group;
         }
 
@@ -2010,7 +2118,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 : fieldElement?.querySelector('input, select');
             const raw = el ? el.value : '';
             if (field.name === 'manufacturer' && raw === '__other__') {
-                const otherInput = fieldElement?.querySelector('[data-field-name="manufacturerOther"]');
+                const otherInput = fieldElement?.closest('.product-form-group')?.querySelector('[data-field-name="manufacturerOther"]')
+                    || fieldElement?.querySelector('[data-field-name="manufacturerOther"]');
                 data[field.name] = otherInput ? otherInput.value.trim() : '';
             } else {
                 data[field.name] = field.numeric ? (parseFloat(raw) || 0) : raw;
@@ -2087,6 +2196,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             const el = document.querySelector(`#productFormFields [data-field-name="${field.name}"]`);
             if (!el) return;
             el.value = field.value !== undefined ? field.value : '';
+            if (field.name === 'manufacturer') el.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
         this.syncConditionalFieldVisibility();

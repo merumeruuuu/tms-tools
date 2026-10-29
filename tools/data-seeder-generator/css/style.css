@@ -956,6 +956,87 @@ select.preview-input {
     margin-top: 8px;
 }
 
+#step-2 .manual-hierarchy-row {
+    display: grid !important;
+    grid-template-columns: minmax(112px, 1.15fr) minmax(120px, 1.5fr) minmax(68px, 0.7fr) minmax(72px, 0.75fr) 28px;
+    align-items: end !important;
+    gap: 8px !important;
+    padding: 9px;
+    border-left: 4px solid #9aa9b9;
+    background: #edf2f7;
+    transition: margin-left 0.15s ease, background-color 0.15s ease;
+}
+
+#step-2 .manual-hierarchy-row.is-outer {
+    border-left-color: #2874c8;
+    background: #d3dae2;
+    box-shadow: inset 0 0 0 1px #c2ccd6;
+}
+
+#step-2 .manual-hierarchy-row.is-nested {
+    margin-left: 14px;
+    border-left-color: #7389a0;
+    background: #e4eaf0;
+}
+
+#step-2 .manual-hierarchy-row.is-smallest:not(.is-outer) {
+    margin-left: 28px;
+    border-left-color: #aebdcb;
+    background: #f5f7fa;
+}
+
+#step-2 .manual-hierarchy-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+#step-2 .manual-hierarchy-level {
+    color: #43566e;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+#step-2 .manual-hierarchy-row.is-outer .manual-hierarchy-level { color: #1d4f87; }
+#step-2 .manual-hierarchy-row.is-smallest .manual-hierarchy-level { color: #61758b; }
+
+#step-2 .manual-hierarchy-field .input-field {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding: 6px 8px;
+    background: #fff;
+}
+
+#step-2 .manual-hierarchy-remove {
+    align-self: center;
+    border: 0;
+    background: transparent;
+    color: #d84747;
+    cursor: pointer;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+#step-2 .manufacturer-other-field { margin-top: 8px; }
+#step-2 .manufacturer-other-field.hidden { display: none; }
+
+@media (max-width: 700px) {
+    #step-2 .manual-hierarchy-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 24px;
+    }
+    #step-2 .manual-hierarchy-quantity { grid-column: 1; }
+    #step-2 .manual-hierarchy-volume { grid-column: 2; }
+    #step-2 .manual-hierarchy-remove { grid-column: 3; grid-row: 1; }
+}
+
 #step-2 .products-preview-table {
     min-width: 560px;
 }
