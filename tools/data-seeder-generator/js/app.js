@@ -2263,7 +2263,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             } else if (format === 'sql-v7') {
                 this.generatedSeeder = window.SeederTemplates.SQL_V7(this.lastSeederConfig.products);
             } else {
-                const className = `UpdateClientData${this.lastSeederConfig.seederNumber}`;
+                const className = `DATA${this.lastSeederConfig.seederNumber}`;
                 this.generatedSeeder = window.SeederTemplates.Q3(className, this.lastSeederConfig.products, this.lastSeederConfig.actionType, this.lastSeederConfig.buildInfo);
             }
             document.getElementById('seederPreview').textContent = this.generatedSeeder;
