@@ -54,7 +54,7 @@ class CsvHandler {
             '"ml"',                              // Measurement Unit
             '48',                                // Open Expiration Date (Hours)
             '24',                                // Base Caloric Value
-            '1.0',                               // Displacement
+            '0',                                 // Displacement
             '1',                                 // Can Be Base
             '0',                                 // Can Be Fortifier
             '0',                                 // Water Displacement

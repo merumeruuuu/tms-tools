@@ -87,7 +87,7 @@ class DataSeederApp {
             barcode: row.querySelector('.hierarchy-bc')?.value || '',
             quantity: row.querySelector('.hierarchy-qty')?.value || '',
             volume: row.querySelector('.hierarchy-vol')?.value || ''
-        }));
+        })).reverse();
 
         const progress = {
             currentStep: this.currentStep,
@@ -163,8 +163,8 @@ class DataSeederApp {
             const hierarchyList = document.querySelector('#productFormFields .hierarchy-list');
             if (hierarchyList && Array.isArray(progress.hierarchy) && progress.hierarchy.length) {
                 hierarchyList.innerHTML = '';
-                progress.hierarchy.forEach((item, index) => {
-                    this.addHierarchyRow(hierarchyList, index === 0);
+                [...progress.hierarchy].reverse().forEach((item, index, visibleHierarchy) => {
+                    this.addHierarchyRow(hierarchyList, index === visibleHierarchy.length - 1);
                     const row = hierarchyList.lastElementChild;
                     row.querySelector('.hierarchy-type').value = item.type;
                     row.querySelector('.hierarchy-bc').value = item.barcode;
@@ -1602,7 +1602,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
                 { type: 'section', label: 'Nutrition Details' },
                 { name: 'caloricValue', label: 'Caloric Density', type: 'number', value: 20, step: 0.1, numeric: true },
-                { name: 'displacement', label: 'Displacement', type: 'number', value: 1.0, step: 0.01, numeric: true },
+                { name: 'displacement', label: 'Displacement', type: 'number', value: 0, step: 0.01, numeric: true },
                 
                 { type: 'section', label: 'Expirations' },
                 { name: 'expirationOpened', label: 'Expiration Once Opened (Hours)', type: 'number', value: 48, numeric: true },
@@ -1615,7 +1615,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     { value: 'oz', label: 'oz' }
                 ]},
                 // Replaces the old static inputs with a dynamic builder
-                { name: 'hierarchy', label: 'Packaging Hierarchy (Top = Innermost Unit)', type: 'packaging-hierarchy' }
+                { name: 'hierarchy', label: 'Packaging Hierarchy (Outer Container at Top, Smallest Unit at Bottom)', type: 'packaging-hierarchy' }
             ],
             'update': [
                 { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
@@ -1646,7 +1646,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 { type: 'section', label: 'Product Identification' },
                 { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
                 { type: 'section', label: 'New Packaging Hierarchy' },
-                { name: 'hierarchy', label: 'Packaging Hierarchy (Top = Innermost Unit)', type: 'packaging-hierarchy' }
+                { name: 'hierarchy', label: 'Packaging Hierarchy (Outer Container at Top, Smallest Unit at Bottom)', type: 'packaging-hierarchy' }
             ],
             // --- NEW MODULE: ADD MANUFACTURER ---
             'add-manufacturer': [
@@ -1673,7 +1673,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         };
         return fields[actionType] || [];
     }
-    addHierarchyRow(container, isInner = false) {
+    addHierarchyRow(container, isInner = false, prepend = false) {
         const row = document.createElement('div');
         row.className = 'hierarchy-row';
         row.style.display = 'flex';
@@ -1735,7 +1735,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             row.appendChild(spacer);
         }
 
-        container.appendChild(row);
+        if (prepend) container.insertBefore(row, container.firstChild);
+        else container.appendChild(row);
     }
     createFormField(field) {
         if (field.type === 'section') {
@@ -1894,13 +1895,13 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             const addBtn = document.createElement('button');
             addBtn.type = 'button';
             addBtn.className = 'btn btn-secondary btn-small';
-            addBtn.innerHTML = '+ Add Outer Container';
+            addBtn.innerHTML = '+ Add Outer Container at Top';
             addBtn.style.width = '100%';
-            addBtn.onclick = () => this.addHierarchyRow(listContainer);
+            addBtn.onclick = () => this.addHierarchyRow(listContainer, false, true);
             
             wrapper.appendChild(addBtn);
 
-            // Automatically inject the required innermost unit row
+            // Keep the smallest unit as the bottom row.
             this.addHierarchyRow(listContainer, true);
 
             return wrapper;
@@ -1995,11 +1996,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     hierarchy.push({
                         containerId: row.querySelector('.hierarchy-type').value,
                         barcode: row.querySelector('.hierarchy-bc').value.trim(),
-                        quantity: parseInt(row.querySelector('.hierarchy-qty').value) || (index === 0 ? 1 : 0),
+                        quantity: parseInt(row.querySelector('.hierarchy-qty').value) || (index === rows.length - 1 ? 1 : 0),
                         volume: parseFloat(row.querySelector('.hierarchy-vol').value) || 0
                     });
                 });
-                data[field.name] = hierarchy;
+                    data[field.name] = hierarchy.reverse();
                 return;
             }
 
