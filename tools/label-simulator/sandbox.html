@@ -250,6 +250,10 @@
                         <option disabled value="">Select a saved build...</option>
                         <option v-for="url in tmsUrls" :key="url" :value="url">{{ url }}</option>
                     </select>
+                    <button @click="switchBuildFolderPermission" class="tms-btn-add" :disabled="isSwitchingBuildFolder" title="Change the shared folder permission used to detect local TMS builds">
+                        <span v-if="isSwitchingBuildFolder">⏳ Selecting...</span>
+                        <span v-else>📂 Switch Folder</span>
+                    </button>
                     <button v-if="selectedTmsUrl" @click="fetchFileList" class="tms-btn-fetch" :disabled="isLoading">
                         <span v-if="isLoading">⏳ Fetching...</span>
                         <span v-else>📥 Fetch EPL files</span>
@@ -262,6 +266,7 @@
                     <button v-if="selectedTmsUrl" @click="removeTmsUrl" class="tms-btn-remove">🗑️ Remove</button>
                     <button @click="showClientDefaultsModal = true" class="tms-btn-add" style="margin-left: auto;">⚙️ Client Defaults</button>
                 </div>
+                <div v-if="folderPermissionStatus" class="folder-permission-status" role="status">{{ folderPermissionStatus }}</div>
             </div>
 
             <div class="toolbar" style="display: flex; flex-direction: column; gap: 8px; background: white; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">

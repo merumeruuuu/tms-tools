@@ -17,17 +17,19 @@ const injectLocalApiEndpoint = async (url, apiKey) => {
     }
     if (!rootHandle) throw new Error("Folder access denied.");
 
-    const pathParts = buildInfo.buildPath.split(/\\|\//).filter(Boolean);
-    const rootIndex = pathParts.findIndex(p => p.toLowerCase() === rootHandle.name.toLowerCase());
-    let currentHandle = rootHandle;
-    
-    if (rootIndex !== -1) {
-        for (let i = rootIndex + 1; i < pathParts.length; i++) {
-            currentHandle = await currentHandle.getDirectoryHandle(pathParts[i]);
-        }
-    } else {
-        currentHandle = await currentHandle.getDirectoryHandle(buildInfo.buildFolder || pathParts[pathParts.length-1]);
+    const projectFolder = buildInfo.buildFolderName || `${buildInfo.clientName}-${buildInfo.version}`;
+    const normalizedProjectFolder = projectFolder.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const projectMatch = await fsAccessManager.findProjectByFolderName(
+        rootHandle,
+        normalizedProjectFolder,
+        [],
+        () => true,
+        true
+    );
+    if (!projectMatch?.projectHandle) {
+        throw new Error(`Could not find ${projectFolder} under the selected folder. Choose the build folder itself or a parent folder containing it.`);
     }
+    const currentHandle = projectMatch.projectHandle;
 
     const vendor = await currentHandle.getDirectoryHandle('vendor');
     const timeless = await vendor.getDirectoryHandle('timeless');
@@ -218,7 +220,7 @@ const injectLocalApiEndpoint = async (url, apiKey) => {
 
 // ... Further down in index.js, inside your existing message listener ...
 window.addEventListener('message', (event) => {
-    // ... existing handlers ...
+    if (event.source !== frame.contentWindow) return;
     
     // Add this new listener condition!
     if (event.data.action === 'INJECT_API') {
@@ -236,6 +238,41 @@ frame.onload = () => {
 };
 
 window.addEventListener('message', async (event) => {
+    if (event.source !== frame.contentWindow) return;
+
+    if (event.data.action === 'SWITCH_BUILD_FOLDER') {
+        const respond = result => frame.contentWindow.postMessage({
+            action: 'SWITCH_BUILD_FOLDER_RESULT',
+            id: event.data.id,
+            ...result
+        }, '*');
+
+        if (typeof fsAccessManager === 'undefined' || !fsAccessManager.isSupported()) {
+            respond({ success: false, error: 'Folder access is not supported in this browser.' });
+            return;
+        }
+
+        try {
+            const handle = await window.showDirectoryPicker({
+                id: 'label-simulator-build-root',
+                mode: 'readwrite'
+            });
+            let permission = await handle.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') permission = await handle.requestPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') throw new Error('Permission was not granted for the selected folder.');
+
+            await fsAccessManager.setStoredHandle(fsAccessManager.rootKey, handle);
+            respond({ success: true, folderName: handle.name });
+        } catch (error) {
+            respond({
+                success: false,
+                cancelled: error.name === 'AbortError',
+                error: error.name === 'AbortError' ? '' : error.message
+            });
+        }
+        return;
+    }
+
     // 1. Storage Saves
     if (event.data.action === 'SAVE_STORAGE') {
         chrome.storage.local.set({ [event.data.key]: event.data.value });

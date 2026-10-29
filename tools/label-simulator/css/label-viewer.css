@@ -41,6 +41,8 @@
         .tms-btn-fetch:disabled { opacity: 0.6; cursor: not-allowed; }
         .tms-btn-add { background: #fff; border: 1px solid #cbd5e1; color: #334155; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; white-space: nowrap; }
         .tms-btn-add:hover { background: #f1f5f9; border-color: #94a3b8; }
+        .tms-btn-add:disabled { opacity: 0.6; cursor: wait; }
+        .folder-permission-status { color: #475569; font-size: 0.78rem; }
         .tms-btn-remove { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; white-space: nowrap; }
         .tms-btn-remove:hover { background: #fee2e2; }
 

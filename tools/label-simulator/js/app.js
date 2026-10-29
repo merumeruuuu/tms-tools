@@ -103,6 +103,8 @@ const app = createApp({
         const selectedTmsUrl = ref('');
         const tmsFiles = ref([]);
         const selectedFileToInspect = ref('');
+        const folderPermissionStatus = ref('');
+        const isSwitchingBuildFolder = ref(false);
         
         const clientPreferences = ref(JSON.parse(localStorage.getItem('tms-client-prefs')) || {});
         const showClientDefaultsModal = ref(false);
@@ -450,6 +452,25 @@ const chooseBarcode = (barcodeVal) => {
             currentViewMode.value = 'local';
             selectedTmsUrl.value = '';
             fetchFiles();
+        };
+
+        const switchBuildFolderPermission = () => {
+            if (isSwitchingBuildFolder.value) return;
+            isSwitchingBuildFolder.value = true;
+            folderPermissionStatus.value = 'Choose the shared folder containing your TMS build(s)...';
+            const requestId = `folder-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const handleResult = (event) => {
+                if (event.data?.action !== 'SWITCH_BUILD_FOLDER_RESULT' || event.data.id !== requestId) return;
+                window.removeEventListener('message', handleResult);
+                isSwitchingBuildFolder.value = false;
+                folderPermissionStatus.value = event.data.success
+                    ? `Folder permission saved: ${event.data.folderName}`
+                    : event.data.cancelled
+                        ? 'Folder selection cancelled.'
+                        : `Folder permission failed: ${event.data.error || 'Unknown error'}`;
+            };
+            window.addEventListener('message', handleResult);
+            window.parent.postMessage({ action: 'SWITCH_BUILD_FOLDER', id: requestId }, '*');
         };
 
         const triggerFolderPicker = () => {
@@ -3128,6 +3149,7 @@ const loadRemoteContent = async (file, isBulk = false) => {
             saveCurrentCalibration, isDemoMode, demoSettings, toggleDemoMode, generateDemoLabels,
             tmsUrls, newTmsUrl, selectedTmsUrl, tmsFiles, selectedFileToInspect, 
             addTmsUrl, removeTmsUrl, fetchFileList,
+            folderPermissionStatus, isSwitchingBuildFolder, switchBuildFolderPermission,
             showClientDefaultsModal, newClientKeyword, saveClientDefault, deleteClientDefault,
             productsData, 
             productSearchQuery,
