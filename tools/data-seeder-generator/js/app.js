@@ -329,29 +329,28 @@ class DataSeederApp {
             categoryId: { '1': 'EBM', '2': 'DHM', '3': 'Formula', '5': 'Additive / Fortifier' },
             containerType: { '1': 'Bottle', '2': 'Carton', '3': 'Can', '4': 'Case', '6': 'Packet', '10': 'Tetra Pak' },
             productUse: { 'base': 'Base Formula', 'fortifier': 'Fortifier', 'modular': 'Modular' },
-            measurementUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' },
-            action: { 'create': 'Create', 'update': 'Update', 'barcode-update': 'Barcode Update', 'add-form-factor': 'Add Form Factor' }
+            measurementUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' }
         };
 
         // --- DYNAMICALLY SHOW ONLY WHAT IS NEEDED ---
         let orderedKeys = [];
         if (product.action === 'add-unit') {
-            orderedKeys = ['action', 'unitName', 'unitADT', 'unitOrder', 'bmMaxVolume', 'formulaMaxVolume', 'waterMaxVolume', 'bmPrepCycle', 'formulaPrepCycle'];
+            orderedKeys = ['unitName', 'unitADT', 'unitOrder', 'bmMaxVolume', 'formulaMaxVolume', 'waterMaxVolume', 'bmPrepCycle', 'formulaPrepCycle'];
         } else if (product.action === 'add-manufacturer') {
-            orderedKeys = ['action', 'manufacturerName', 'manufacturerDescription'];
+            orderedKeys = ['manufacturerName', 'manufacturerDescription'];
         } else if (product.action === 'add-form-factor') {
-            orderedKeys = ['action', 'productName', 'productCode'];
+            orderedKeys = ['productName', 'productCode'];
         } else if (product.action === 'barcode-update') {
-            orderedKeys = ['action', 'productName', 'oldProductCode', 'newProductCode'];
+            orderedKeys = ['productName', 'oldProductCode', 'newProductCode'];
         } else if (product.action === 'update') {
-            orderedKeys = ['action', 'productName'];
+            orderedKeys = ['productName'];
             if (Array.isArray(product.updateFields)) {
                 orderedKeys = orderedKeys.concat(product.updateFields);
             }
         } else {
             // Default "Create" layout
             orderedKeys = [
-                'action', 'manufacturer', 'productName', 'shortName', 'productCode',
+                'manufacturer', 'productName', 'shortName', 'productCode',
                 'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
                 'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit'
             ];
@@ -400,7 +399,7 @@ class DataSeederApp {
         }
 
         const leftKeys = product.action === 'create'
-            ? ['action', 'manufacturer', 'productName', 'shortName', 'productCode', 'barcode', 'hl7Reference', 'hl7Fortifier']
+            ? ['manufacturer', 'productName', 'shortName', 'productCode', 'barcode', 'hl7Reference', 'hl7Fortifier']
             : orderedKeys.filter((_, index) => index % 2 === 0);
         const rightKeys = product.action === 'create'
             ? ['productType', 'productUse', 'categoryId', 'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit']
