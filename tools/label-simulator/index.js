@@ -227,8 +227,21 @@ window.addEventListener('message', (event) => {
         injectLocalApiEndpoint(event.data.url, event.data.apiKey)
             .then(buildInfo => {
                 if (buildInfo) console.log("API Injected for", buildInfo.clientName);
+                if (event.data.id) frame.contentWindow.postMessage({
+                    action: 'INJECT_API_RESULT',
+                    id: event.data.id,
+                    success: Boolean(buildInfo)
+                }, '*');
             })
-            .catch(err => console.warn("Auto-Injection skipped or failed:", err));
+            .catch(err => {
+                console.warn("Auto-Injection skipped or failed:", err);
+                if (event.data.id) frame.contentWindow.postMessage({
+                    action: 'INJECT_API_RESULT',
+                    id: event.data.id,
+                    success: false,
+                    error: err.message
+                }, '*');
+            });
     }
 });
 frame.onload = () => {

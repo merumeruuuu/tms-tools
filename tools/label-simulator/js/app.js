@@ -36,6 +36,27 @@ const extensionFetch = (url, headers, method = 'GET') => {
         window.parent.postMessage({ action: 'FETCH_API', id: fetchId, url: url, headers: headers, method: method }, '*');
     });
 };
+const injectLocalApiEndpoint = (url) => new Promise((resolve, reject) => {
+    const requestId = Math.random().toString(36).substring(7);
+    const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', messageHandler);
+        reject(new Error('Timed out while preparing the local labels endpoint.'));
+    }, 120000);
+    const messageHandler = (event) => {
+        if (event.source !== window.parent || event.data.action !== 'INJECT_API_RESULT' || event.data.id !== requestId) return;
+        clearTimeout(timeoutId);
+        window.removeEventListener('message', messageHandler);
+        if (event.data.success) resolve();
+        else reject(new Error(event.data.error || 'Local API injection failed.'));
+    };
+    window.addEventListener('message', messageHandler);
+    window.parent.postMessage({
+        action: 'INJECT_API',
+        id: requestId,
+        url,
+        apiKey: ENV_QA_API_KEY
+    }, '*');
+});
 // Global App Variables
 const isDevMode = ref(false); 
 //  FIX: Read directly from local memory on boot! No async message waiting.
@@ -685,9 +706,25 @@ const loadRemoteContent = async (file, isBulk = false) => {
                 const previousSnapshot = sessionStorage.getItem(storageKey);
                 const existingFileNames = new Set(previousSnapshot ? JSON.parse(previousSnapshot) : []);
                 
-                const rawData = await extensionFetch(`${selectedTmsUrl.value}/api/customer/interoperability/labels/fetch`, { 
-                    'X-QA-Key': ENV_QA_API_KEY 
-                });
+                const listUrl = `${selectedTmsUrl.value}/api/customer/interoperability/labels/fetch`;
+                const requestLabelList = () => extensionFetch(listUrl, { 'X-QA-Key': ENV_QA_API_KEY });
+                let rawData;
+                try {
+                    rawData = await requestLabelList();
+                } catch (requestError) {
+                    const isNotFound = requestError.message.includes('<title>Not Found</title>') || /\b404\b/.test(requestError.message);
+                    let isLocalEnv = false;
+                    try {
+                        const hostname = new URL(selectedTmsUrl.value).hostname.toLowerCase();
+                        isLocalEnv = hostname.endsWith('.local') || hostname.endsWith('.test') || hostname === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+                    } catch (urlError) {
+                        isLocalEnv = false;
+                    }
+                    if (!isNotFound || !isLocalEnv) throw requestError;
+
+                    await injectLocalApiEndpoint(selectedTmsUrl.value);
+                    rawData = await requestLabelList();
+                }
                 
                 const parsedData = JSON.parse(rawData);
                 const filenames = Array.isArray(parsedData) ? parsedData : (parsedData.files || []);
@@ -718,38 +755,15 @@ const loadRemoteContent = async (file, isBulk = false) => {
                 currentViewMode.value = 'remote';
                 selectedFiles.value = [];
             } catch (e) {
-                if (selectedTmsUrl.value) {
-                    try {
-                        //  Try to parse the rich JSON clue from the backend!
-                        const errObj = JSON.parse(e.message);
-                        let alertMsg = `❌ ${errObj.error}\n\n💡 Clue: ${errObj.clue}`;
-                        
-                        if (errObj.path_checked) alertMsg += `\n\n📁 Path: ${errObj.path_checked}`;
-                        if (errObj.line) alertMsg += `\n\n⚙️ File: ${errObj.file} (Line ${errObj.line})`;
-                        
-                        alert(alertMsg);
-                    } catch (parseErr) {
-                        // Check if it's the raw HTML 404 error page from Laravel
-                        if (e.message.includes('<title>Not Found</title>') || e.message.includes('404')) {
-                            
-                            const isLocalEnv = selectedTmsUrl.value.includes('.local') || selectedTmsUrl.value.includes('.test') || selectedTmsUrl.value.includes('localhost') || selectedTmsUrl.value.match(/^\d+\.\d+\.\d+\.\d+/);
-
-                            if (isLocalEnv) {
-                                // FORCE RE-TRIGGER INJECTION!
-                                window.parent.postMessage({
-                                    action: 'INJECT_API',
-                                    url: selectedTmsUrl.value,
-                                    apiKey: ENV_QA_API_KEY
-                                }, '*');
-
-                                alert("Searching Local build!\n\nThe Simulator is attempting to inject the secure endpoint into this Laravel build right now.\n\nMake sure to grant folder permissions if Chrome asks. Wait a few seconds, then click 'Fetching...' again.");
-                                return;
-                            }
-                        }
-                        
-                        // If it's not a 404 or not a local URL, show the standard network error
-                        alert("Network Error: " + e.message);
-                    }
+                if (!selectedTmsUrl.value) return;
+                try {
+                    const errObj = JSON.parse(e.message);
+                    let alertMsg = `❌ ${errObj.error}\n\n💡 Clue: ${errObj.clue}`;
+                    if (errObj.path_checked) alertMsg += `\n\n📁 Path: ${errObj.path_checked}`;
+                    if (errObj.line) alertMsg += `\n\n⚙️ File: ${errObj.file} (Line ${errObj.line})`;
+                    alert(alertMsg);
+                } catch (parseErr) {
+                    alert("Network Error: " + e.message);
                 }
             } finally {
                 setTimeout(() => { isLoading.value = false; loading.value = false; }, 1000);
@@ -868,14 +882,12 @@ const loadRemoteContent = async (file, isBulk = false) => {
                 const protocol = isLocalEnv ? 'http://' : 'https://';
                 const finalUrl = protocol + cleanHost;
 
-                // --- AUTO INJECTOR BRIDGE ---
                 if (isLocalEnv) {
-                    // Ask the parent window to handle the file system!
-                    window.parent.postMessage({
-                        action: 'INJECT_API',
-                        url: finalUrl,
-                        apiKey: ENV_QA_API_KEY
-                    }, '*');
+                    try {
+                        await injectLocalApiEndpoint(finalUrl);
+                    } catch (injectionError) {
+                        console.warn("Local API setup will be retried when labels are fetched:", injectionError);
+                    }
                 }
 
                 if (!tmsUrls.value.includes(finalUrl)) {
