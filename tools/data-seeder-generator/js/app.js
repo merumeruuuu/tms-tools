@@ -64,6 +64,7 @@ const UPDATE_FIELD_DEFINITIONS = [
         { value: 'OWYN', label: 'OWYN' },
         { value: '__other__', label: 'Other (enter manufacturer)' }
     ]},
+    { value: 'productName', label: 'Product Name', type: 'text', placeholder: 'e.g., Similac Pro-Advance', icon: '🏷️', theme: 'blue' },
     { value: 'shortName', label: 'Short Name', type: 'text', placeholder: 'e.g., Similac', icon: '📝', theme: 'blue' },
     { value: 'hl7Reference', label: 'HL7 Reference', type: 'text', placeholder: 'e.g., MLT-17', icon: '🔌', theme: 'purple' },
     { value: 'hl7Fortifier', label: 'Fortifier HL7', type: 'text', placeholder: 'e.g., FORT-09', icon: '🔌', theme: 'purple' },
@@ -345,7 +346,7 @@ class DataSeederApp {
         } else if (product.action === 'update') {
             orderedKeys = ['productName'];
             if (Array.isArray(product.updateFields)) {
-                orderedKeys = orderedKeys.concat(product.updateFields);
+                orderedKeys = orderedKeys.concat(product.updateFields.map(field => field === 'productName' ? 'newProductName' : field));
             }
         } else {
             // Default "Create" layout
@@ -367,6 +368,7 @@ class DataSeederApp {
             if (key === 'productCode') formattedLabel = 'Item Number';
             if (key === 'oldProductCode') formattedLabel = 'Old Barcode';
             if (key === 'newProductCode') formattedLabel = 'New Barcode';
+            if (key === 'newProductName') formattedLabel = 'Product Name';
             if (key === 'barcode') formattedLabel = 'Barcode';
             if (key === 'hl7Reference') formattedLabel = 'Base HL7 Reference';
             if (key === 'hl7Fortifier') formattedLabel = 'Fortifier HL7 Reference';
@@ -1669,8 +1671,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     options: UPDATE_FIELD_DEFINITIONS.map(field => ({ value: field.value, label: field.label }))
                 },
                 ...UPDATE_FIELD_DEFINITIONS.map(field => ({
-                    name: field.value,
-                    label: `New ${field.label}`,
+                    name: field.value === 'productName' ? 'newProductName' : field.value,
+                    label: field.value === 'productName' ? 'New Product Name' : `New ${field.label}`,
                     type: 'conditional-input',
                     dependsOn: 'updateFields',
                     dependsValue: field.value,
@@ -2144,6 +2146,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
         if (actionType === 'update' && (!Array.isArray(data.updateFields) || data.updateFields.length === 0)) {
             this.showStatus('Select at least one field to update.', 'error');
+            return null;
+        }
+
+        if (actionType === 'update' && data.updateFields.includes('productName') && !data.newProductName) {
+            this.showStatus('Enter the new product name before saving the update.', 'error');
             return null;
         }
 

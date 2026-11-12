@@ -194,6 +194,10 @@ window.SeederTemplates.SQL_V6 = function(products) {
             sqlOutput += `SET @${varPrefix}ID = (SELECT \`formtypeID\` FROM \`nutrition_product_types\` WHERE \`formtypeName\` = '${name}' LIMIT 1);\n\n`;
             
             let setClauses = [];
+            if (p.updateFields && p.updateFields.includes('productName')) {
+                const updatedProductName = (p.newProductName || p.productName || '').replace(/'/g, "\\'");
+                setClauses.push(`\`formtypeName\` = '${updatedProductName}'`);
+            }
             if (p.updateFields && p.updateFields.includes('shortName')) setClauses.push(`\`formtypeShortName\` = '${(p.shortName || '').replace(/'/g, "\\'")}'`);
             if (p.updateFields && p.updateFields.includes('hl7Reference')) setClauses.push(`\`formtypeHL7Reference\` = '${(p.hl7Reference || '').replace(/'/g, "\\'")}'`);
             if (p.updateFields && p.updateFields.includes('productType')) setClauses.push(`\`formtypeType\` = '${p.productType}'`);

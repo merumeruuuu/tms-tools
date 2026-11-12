@@ -215,6 +215,10 @@ ${createData}
             let mfgSearch = null;
             let unitName = null;
 
+            if (product.updateFields.includes('productName')) {
+                const updatedProductName = (product.newProductName || product.productName || '').replace(/'/g, "\\'");
+                fields.push(`'${C.NAME}' => '${updatedProductName}'`);
+            }
             if (product.updateFields.includes('shortName')) fields.push(`'${C.SHORT_NAME}' => '${(product.shortName || '').replace(/'/g, "\\'")}'`);
             if (product.updateFields.includes('hl7Reference')) fields.push(`'${C.HL7_REF}' => '${(product.hl7Reference || '').replace(/'/g, "\\'")}'`);
             if (product.updateFields.includes('productType')) fields.push(`'${C.TYPE}' => ${product.productType}`);
