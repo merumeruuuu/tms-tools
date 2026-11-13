@@ -71,9 +71,7 @@ const UPDATE_FIELD_DEFINITIONS = [
     { value: 'productType', label: 'Product Type', type: 'select', icon: '✨', theme: 'green', options: [
         { value: '3', label: 'Powder' }, { value: '2', label: 'Liquid Concentrate' }, { value: '1', label: 'Ready-to-Feed Liquid' }
     ]},
-    { value: 'productUse', label: 'Product Use', type: 'select', icon: '✨', theme: 'green', options: [
-        { value: 'base', label: 'Base Formula' }, { value: 'fortifier', label: 'Fortifier' }, { value: 'modular', label: 'Modular' }
-    ]},
+    { value: 'useContexts', label: 'Use Contexts', type: 'use-contexts', icon: '✨', theme: 'green', defaultValue: ['feed-base'] },
     { value: 'categoryId', label: 'Category', type: 'select', icon: '✨', theme: 'green', options: [
         { value: '3', label: 'Formula' }, { value: '5', label: 'Additive' }, { value: '1', label: 'EBM' }, { value: '2', label: 'DHM' }
     ]},
@@ -84,6 +82,94 @@ const UPDATE_FIELD_DEFINITIONS = [
     { value: 'measurementVolume', label: 'Unit Volume', type: 'number', step: 0.1, numeric: true, icon: '📏', theme: 'teal' },
     { value: 'measurementUnit', label: 'Measurement Unit', type: 'select', icon: '⚖️', theme: 'teal', options: [
         { value: 'ml', label: 'mL' }, { value: 'g', label: 'g' }, { value: 'oz', label: 'oz' }
+    ]}
+];
+
+const USE_CONTEXT_OPTIONS = [
+    { value: 'additive', label: 'Additive' },
+    { value: 'feed-base', label: 'Feed Base' },
+    { value: 'modular', label: 'Modular' }
+];
+
+function formatUnitDisplayLabel(uom) {
+    const u = (uom || 'ml').toLowerCase();
+    if (u === 'ml') return 'mL';
+    return u;
+}
+
+function normalizeProductUseContexts(product) {
+    if (Array.isArray(product.useContexts) && product.useContexts.length > 0) {
+        return [...product.useContexts];
+    }
+    if (product.productUse === 'fortifier') return ['additive'];
+    if (product.productUse === 'modular') return ['additive', 'modular'];
+    return ['feed-base'];
+}
+
+function formatUseContextsSummary(contexts) {
+    const map = { 'additive': 'Additive', 'feed-base': 'Feed Base', 'modular': 'Modular' };
+    return (contexts || []).map(c => map[c] || c).join(' + ');
+}
+
+const CONTAINER_TYPE_OPTIONS = [
+    { value: '1', label: 'Bottle' },
+    { value: '2', label: 'Carton' },
+    { value: '3', label: 'Can' },
+    { value: '4', label: 'Case' },
+    { value: '5', label: 'Vial' },
+    { value: '6', label: 'Packet' },
+    { value: '7', label: 'Pack' },
+    { value: '8', label: 'Sachet' },
+    { value: '9', label: 'Tub' },
+    { value: '10', label: 'Tetra Pak' },
+    { value: '11', label: 'Tetra Prisma' },
+    { value: '12', label: 'Tetra Brik' },
+    { value: '13', label: 'Pouch' },
+    { value: '14', label: 'Bag' },
+    { value: '15', label: 'Box' },
+    { value: '16', label: 'Cup' },
+    { value: '17', label: 'Stick' }
+];
+
+const CONTAINER_TYPE_MATCHERS = [
+    { id: '11', regex: /\btetra\s*prisma\b/i },
+    { id: '12', regex: /\btetra\s*brik\b/i },
+    { id: '10', regex: /\btetra(?:\s*pak)?\b/i },
+    { id: '1', regex: /\bbottle\b/i },
+    { id: '2', regex: /\bcarton\b/i },
+    { id: '3', regex: /\bcan\b/i },
+    { id: '4', regex: /\bcase\b/i },
+    { id: '5', regex: /\bvial\b/i },
+    { id: '6', regex: /\bpacket\b/i },
+    { id: '7', regex: /\bpack\b/i },
+    { id: '8', regex: /\bsachet\b/i },
+    { id: '9', regex: /\btub\b/i },
+    { id: '13', regex: /\bpouch\b/i },
+    { id: '14', regex: /\bbag\b/i },
+    { id: '15', regex: /\bbox\b/i },
+    { id: '16', regex: /\bcup\b/i },
+    { id: '17', regex: /\bstick\b/i }
+];
+
+function resolveContainerTypeId(rawText, defaultId = '') {
+    if (!rawText) return defaultId;
+    const str = String(rawText);
+    for (const matcher of CONTAINER_TYPE_MATCHERS) {
+        if (matcher.regex.test(str)) return matcher.id;
+    }
+    return defaultId;
+}
+
+const UPDATE_ITEM_FIELD_DEFINITIONS = [
+    { value: 'newProductCode', label: 'Item Number', type: 'text', placeholder: 'e.g., 174004' },
+    { value: 'itemName', label: 'Item Name', type: 'text', placeholder: 'e.g., Enfamil Infant PWD (12.5 oz)' },
+    { value: 'leafContainerType', label: 'Leaf Form Factor Type', type: 'select', options: CONTAINER_TYPE_OPTIONS },
+    { value: 'measurementVolume', label: 'Volume', type: 'number', step: 'any', numeric: true, placeholder: 'e.g., 369.66870' },
+    { value: 'measurementUnit', label: 'Measurement Unit', type: 'select', options: [
+        { value: 'ml', label: 'mL' }, { value: 'g', label: 'g' }, { value: 'oz', label: 'oz' }
+    ]},
+    { value: 'itemActive', label: 'Active Status', type: 'select', options: [
+        { value: '1', label: 'Active (1)' }, { value: '0', label: 'Inactive (0)' }
     ]}
 ];
 
@@ -109,7 +195,7 @@ class DataSeederApp {
     init() {
         this.setupEventListeners();
         this.loadFavorites();
-        this.setupDragAndDrop(); // Call it from here
+        this.setupDragAndDrop();
         this.setupProgressPersistence();
         this.restoreProgress();
         this.loadCachedCatalog();
@@ -127,8 +213,17 @@ class DataSeederApp {
     saveProgress() {
         const formValues = {};
         document.querySelectorAll('#productFormFields input[data-field-name], #productFormFields select[data-field-name], #productFormFields textarea[data-field-name]').forEach(control => {
-            formValues[control.dataset.fieldName] = control.type === 'checkbox' ? control.checked : control.value;
+            if (control.type === 'radio') {
+                if (control.checked) formValues[control.dataset.fieldName] = control.value;
+            } else if (control.type === 'checkbox') {
+                formValues[control.dataset.fieldName] = control.checked;
+            } else {
+                formValues[control.dataset.fieldName] = control.value;
+            }
         });
+
+        const useContexts = Array.from(document.querySelectorAll('#productFormFields .use-context-cb:checked'))
+            .map(cb => cb.value);
 
         const hierarchy = Array.from(document.querySelectorAll('#productFormFields .hierarchy-row')).map(row => ({
             type: row.querySelector('.hierarchy-type')?.value || '',
@@ -136,6 +231,14 @@ class DataSeederApp {
             quantity: row.querySelector('.hierarchy-qty')?.value || '',
             volume: row.querySelector('.hierarchy-vol')?.value || ''
         })).reverse();
+
+        const containerUpdates = Array.from(document.querySelectorAll('#productFormFields .container-update-row')).map(row => ({
+            target: row.querySelector('.cu-target')?.value || 'leaf',
+            currentBarcode: row.querySelector('.cu-current-bc')?.value || '',
+            newContainerType: row.querySelector('.cu-new-type')?.value || '',
+            newBarcode: row.querySelector('.cu-new-bc')?.value || '',
+            newQuantity: row.querySelector('.cu-new-qty')?.value || ''
+        }));
 
         const progress = {
             currentStep: this.currentStep,
@@ -148,9 +251,13 @@ class DataSeederApp {
             actionType: document.getElementById('actionType').value,
             activeTab: document.querySelector('.form-tab-btn.active')?.dataset.tab || 'manual',
             formValues,
-            updateFields: Array.from(document.querySelectorAll('#productFormFields .field-checkbox:checked'))
+            useContexts,
+            updateFields: Array.from(document.querySelectorAll('#productFormFields [data-field-name="updateFields"] .field-checkbox:checked'))
+                .map(checkbox => checkbox.dataset.fieldValue),
+            updateItemFields: Array.from(document.querySelectorAll('#productFormFields [data-field-name="updateItemFields"] .field-checkbox:checked'))
                 .map(checkbox => checkbox.dataset.fieldValue),
             hierarchy,
+            containerUpdates,
             outputMethod: document.querySelector('input[name="output"]:checked')?.value || 'download'
         };
 
@@ -189,23 +296,57 @@ class DataSeederApp {
         }
         this.updateSeederNumberDisplay(progress.seederNumber || '', progress.seederNumber ? 'saved' : 'action required');
 
-        const actionType = progress.actionType || '';
+        const actionType = progress.actionType === 'barcode-update' ? 'update-form-factor' : (progress.actionType || '');
         document.getElementById('actionType').value = actionType;
         if (actionType) {
             this.loadProductForm(actionType);
+
             const updateGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
             if (updateGroup && Array.isArray(progress.updateFields)) {
                 updateGroup.querySelectorAll('.field-checkbox').forEach(checkbox => {
-                    checkbox.checked = progress.updateFields.includes(checkbox.dataset.fieldValue);
+                    const checked = progress.updateFields.includes(checkbox.dataset.fieldValue);
+                    checkbox.checked = checked;
+                    checkbox.closest('.update-toggle-btn')?.classList.toggle('selected', checked);
                 });
                 this.syncConditionalFieldVisibility();
             }
 
+            const updateItemGroup = document.querySelector('#productFormFields [data-field-name="updateItemFields"]');
+            if (updateItemGroup && Array.isArray(progress.updateItemFields)) {
+                updateItemGroup.querySelectorAll('.field-checkbox').forEach(checkbox => {
+                    const checked = progress.updateItemFields.includes(checkbox.dataset.fieldValue);
+                    checkbox.checked = checked;
+                    checkbox.closest('.update-toggle-btn')?.classList.toggle('selected', checked);
+                });
+                this.syncConditionalFieldVisibility();
+            }
+
+            if (Array.isArray(progress.useContexts)) {
+                const ucBox = document.querySelector('#productFormFields .use-contexts-box');
+                if (ucBox) {
+                    ucBox.querySelectorAll('.use-context-cb').forEach(cb => {
+                        cb.checked = progress.useContexts.includes(cb.value);
+                    });
+                    this.syncAdditiveContextPanel(ucBox);
+                }
+            }
+
             Object.entries(progress.formValues || {}).forEach(([name, value]) => {
+                if (name === 'additiveMethod') {
+                    const radio = document.querySelector(`#productFormFields input[data-field-name="additiveMethod"][value="${value}"]`);
+                    if (radio) {
+                        radio.checked = true;
+                        const ucBox = radio.closest('.use-contexts-box');
+                        if (ucBox) this.syncAdditiveCustomFields(ucBox);
+                    }
+                    return;
+                }
                 const control = document.querySelector(`#productFormFields input[data-field-name="${name}"], #productFormFields select[data-field-name="${name}"], #productFormFields textarea[data-field-name="${name}"]`);
-                if (!control || control.type === 'checkbox') return;
+                if (!control || control.type === 'checkbox' || control.type === 'radio') return;
                 control.value = value;
-                if (name === 'manufacturer') control.dispatchEvent(new Event('change', { bubbles: true }));
+                if (name === 'manufacturer' || name === 'measurementUnit') {
+                    control.dispatchEvent(new Event('change', { bubbles: true }));
+                }
             });
 
             const hierarchyList = document.querySelector('#productFormFields .hierarchy-list');
@@ -218,6 +359,14 @@ class DataSeederApp {
                     row.querySelector('.hierarchy-bc').value = item.barcode;
                     row.querySelector('.hierarchy-qty').value = item.quantity;
                     row.querySelector('.hierarchy-vol').value = item.volume;
+                });
+            }
+
+            const containerUpdatesList = document.querySelector('#productFormFields .container-updates-list');
+            if (containerUpdatesList && Array.isArray(progress.containerUpdates) && progress.containerUpdates.length) {
+                containerUpdatesList.innerHTML = '';
+                progress.containerUpdates.forEach(item => {
+                    this.addContainerUpdateRow(containerUpdatesList, item);
                 });
             }
         }
@@ -238,14 +387,13 @@ class DataSeederApp {
         this.showStep(this.currentStep);
         this.saveProgress();
     }
+
     async loadCachedCatalog() {
         if (typeof idbKeyval === 'undefined') return;
         try {
             const cached = await idbKeyval.get('cachedApiProducts');
             if (cached && cached.length > 0) {
                 apiService.cachedProducts = cached;
-                
-                // Unlock the search bar and update the button
                 document.getElementById('apiSearchInput').disabled = false;
                 const loadBtn = document.getElementById('apiLoadCatalogBtn');
                 loadBtn.innerHTML = '✅ Products Ready';
@@ -261,7 +409,6 @@ class DataSeederApp {
         }
     }
 
-    // Define it OUTSIDE of init(), as its own class method
     setupDragAndDrop() {
         const dropZones = [
             { id: 'doc-tab', inputId: 'docFile' },
@@ -275,7 +422,6 @@ class DataSeederApp {
 
             if (!dropArea || !input) return;
 
-            // Prevent default browser behavior (opening the file)
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropArea.addEventListener(eventName, preventDefaults, false);
             });
@@ -285,7 +431,6 @@ class DataSeederApp {
                 e.stopPropagation();
             }
 
-            // Add visual feedback
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropArea.addEventListener(eventName, () => {
                     dropArea.classList.add('drag-active');
@@ -298,25 +443,24 @@ class DataSeederApp {
                 }, false);
             });
 
-            // Handle the drop
             dropArea.addEventListener('drop', (e) => {
                 const dt = e.dataTransfer;
                 const files = dt.files;
 
                 if (files && files.length > 0) {
                     input.files = files;
-                    // Trigger the native change event so your existing handlers run
                     input.dispatchEvent(new Event('change'));
                 }
             });
         });
     }
+
     previewProduct(index) {
         this.editingProductIndex = index;
         const product = this.products[index];
         if (!product) return;
 
-        if (!product.hierarchy || product.hierarchy.length === 0) {
+        if ((product.action === 'create' || product.action === 'add-form-factor') && (!product.hierarchy || product.hierarchy.length === 0)) {
             product.hierarchy = [{
                 containerId: product.containerType || '1',
                 barcode: product.barcode || '',
@@ -325,15 +469,21 @@ class DataSeederApp {
             }];
         }
 
+        if (product.action === 'create' || (product.action === 'update' && Array.isArray(product.updateFields) && (product.updateFields.includes('useContexts') || product.updateFields.includes('productUse')))) {
+            product.useContexts = normalizeProductUseContexts(product);
+        }
+
+        const containerTypeMap = Object.fromEntries(CONTAINER_TYPE_OPTIONS.map(o => [o.value, o.label]));
         const mappings = {
             productType: { '1': 'Ready-to-Feed Liquid', '2': 'Liquid Concentrate', '3': 'Powder' },
             categoryId: { '1': 'EBM', '2': 'DHM', '3': 'Formula', '5': 'Additive / Fortifier' },
-            containerType: { '1': 'Bottle', '2': 'Carton', '3': 'Can', '4': 'Case', '6': 'Packet', '10': 'Tetra Pak' },
-            productUse: { 'base': 'Base Formula', 'fortifier': 'Fortifier', 'modular': 'Modular' },
-            measurementUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' }
+            containerType: containerTypeMap,
+            leafContainerType: containerTypeMap,
+            measurementUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' },
+            additiveUnit: { 'ml': 'mL', 'g': 'g', 'oz': 'oz' },
+            itemActive: { '1': 'Active (1)', '0': 'Inactive (0)' }
         };
 
-        // --- DYNAMICALLY SHOW ONLY WHAT IS NEEDED ---
         let orderedKeys = [];
         if (product.action === 'add-unit') {
             orderedKeys = ['unitName', 'unitADT', 'unitOrder', 'bmMaxVolume', 'formulaMaxVolume', 'waterMaxVolume', 'bmPrepCycle', 'formulaPrepCycle'];
@@ -346,38 +496,125 @@ class DataSeederApp {
         } else if (product.action === 'update') {
             orderedKeys = ['productName'];
             if (Array.isArray(product.updateFields)) {
-                orderedKeys = orderedKeys.concat(product.updateFields.map(field => field === 'productName' ? 'newProductName' : field));
+                orderedKeys = orderedKeys.concat(product.updateFields.map(field => {
+                    if (field === 'productName') return 'newProductName';
+                    if (field === 'productUse') return 'useContexts';
+                    return field;
+                }));
+            }
+        } else if (product.action === 'update-form-factor') {
+            orderedKeys = ['productName', 'productCode', 'lookupBarcode'];
+            if (Array.isArray(product.updateItemFields)) {
+                orderedKeys = orderedKeys.concat(product.updateItemFields);
             }
         } else {
-            // Default "Create" layout
             orderedKeys = [
                 'manufacturer', 'productName', 'shortName', 'productCode',
-                'hl7Reference', 'hl7Fortifier', 'productType', 'productUse', 'categoryId',
-                'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit'
+                'hl7Reference', 'hl7Fortifier', 'productType', 'useContexts', 'categoryId',
+                'caloricValue', 'displacement', 'expirationOpened', 'measurementUnit'
             ];
         }
 
         const detailsContainer = document.getElementById('previewDetails');
-        let html = '<div class="tmnp-product-form"><div class="tmnp-product-columns">';
+        let html = '<div class="tmnp-product-form"><div class="tmnp-product-columns"><div class="tmnp-product-column">';
         const fieldMarkup = {};
 
         for (const key of orderedKeys) {
+            if (key === 'useContexts') {
+                const activeContexts = normalizeProductUseContexts(product);
+                const isAdditive = activeContexts.includes('additive');
+                const currentUom = product.measurementUnit || 'ml';
+                const addMethod = product.additiveMethod || 'standard';
+                const addUnit = product.additiveUnit || currentUom;
+                const atomicVal = product.atomicUnits !== undefined ? product.atomicUnits : 1;
+                const decVal = product.decimalPlaces !== undefined ? product.decimalPlaces : (addUnit === 'g' ? 1 : 0);
+                const expPrepVal = product.expirationPrepared !== undefined && product.expirationPrepared !== '' ? product.expirationPrepared : 48;
+
+                const checkboxesHtml = USE_CONTEXT_OPTIONS.map(opt => `
+                    <label class="use-context-option">
+                        <input type="checkbox" class="preview-use-context-cb" value="${opt.value}" ${activeContexts.includes(opt.value) ? 'checked' : ''}>
+                        <span>${opt.label}</span>
+                    </label>
+                `).join('');
+
+                fieldMarkup[key] = `
+                    <div class="tmnp-field">
+                        <span class="preview-label">Use Contexts</span>
+                        <div class="use-context-checks">${checkboxesHtml}</div>
+                        <div id="previewAdditiveContextPanel" class="additive-context-panel${isAdditive ? '' : ' hidden'}" style="margin-top:8px;">
+                            <div class="additive-context-header">Additive Context Information :</div>
+                            <div class="additive-context-rows">
+                                <div class="additive-context-row">
+                                    <div class="additive-row-label">Measurement Method:</div>
+                                    <div class="additive-row-control">
+                                        <div class="additive-radio-list">
+                                            <label class="additive-radio-option">
+                                                <input type="radio" name="previewAdditiveMethod" class="preview-additive-method" value="standard" ${addMethod === 'standard' ? 'checked' : ''}>
+                                                <span id="previewStandardUnitLabel">Standard Units (${formatUnitDisplayLabel(currentUom)})</span>
+                                            </label>
+                                            <label class="additive-radio-option">
+                                                <input type="radio" name="previewAdditiveMethod" class="preview-additive-method" value="custom" ${addMethod === 'custom' ? 'checked' : ''}>
+                                                <span>Custom Units</span>
+                                            </label>
+                                        </div>
+                                        <div id="previewAdditiveCustomFields" class="additive-custom-fields${addMethod === 'custom' ? '' : ' hidden'}">
+                                            <label class="additive-custom-field">
+                                                <span>Unit</span>
+                                                <select class="preview-input" data-key="additiveUnit">
+                                                    <option value="ml" ${addUnit === 'ml' ? 'selected' : ''}>mL</option>
+                                                    <option value="g" ${addUnit === 'g' ? 'selected' : ''}>g</option>
+                                                    <option value="oz" ${addUnit === 'oz' ? 'selected' : ''}>oz</option>
+                                                </select>
+                                            </label>
+                                            <label class="additive-custom-field">
+                                                <span>Atomic Units</span>
+                                                <input type="number" step="any" class="preview-input" data-key="atomicUnits" value="${atomicVal}">
+                                            </label>
+                                            <label class="additive-custom-field">
+                                                <span>Decimals</span>
+                                                <input type="number" min="0" max="4" class="preview-input" data-key="decimalPlaces" value="${decVal}">
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="additive-context-row">
+                                    <div class="additive-row-label">Hours Until Expiry Once Prepared:</div>
+                                    <div class="additive-row-control">
+                                        <div class="additive-expiry-inline">
+                                            <div class="additive-expiry-input-wrap">
+                                                <input type="number" min="1" class="preview-input" data-key="expirationPrepared" value="${expPrepVal}">
+                                                <span class="additive-req-star">*</span>
+                                            </div>
+                                            <span class="additive-expiry-hint">This is the amount of time (in hours) that a container containing this product as an additive will expire.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                continue;
+            }
+
             let value = product[key] !== undefined && product[key] !== null ? product[key] : '';
-            
+
             let formattedLabel = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-            if (key === 'productCode') formattedLabel = 'Item Number';
+            if (key === 'productCode') formattedLabel = product.action === 'update-form-factor' ? 'Current Item Number' : 'Item Number';
+            if (key === 'newProductCode') formattedLabel = product.action === 'update-form-factor' ? 'New Item Number' : 'New Barcode';
+            if (key === 'lookupBarcode') formattedLabel = 'Current Container Barcode';
             if (key === 'oldProductCode') formattedLabel = 'Old Barcode';
-            if (key === 'newProductCode') formattedLabel = 'New Barcode';
             if (key === 'newProductName') formattedLabel = 'Product Name';
             if (key === 'barcode') formattedLabel = 'Barcode';
             if (key === 'hl7Reference') formattedLabel = 'Base HL7 Reference';
             if (key === 'hl7Fortifier') formattedLabel = 'Fortifier HL7 Reference';
+            if (key === 'leafContainerType') formattedLabel = 'Leaf Form Factor Type';
+            if (key === 'itemActive') formattedLabel = 'Item Active Status';
 
-            const isMissing = (value === '');
+            const isMissing = (value === '') && !['productName', 'productCode', 'lookupBarcode'].includes(key);
             const missingClass = isMissing ? ' is-missing' : '';
 
             let inputHtml = '';
-            
+
             if (mappings[key]) {
                 inputHtml = `<select class="preview-input${missingClass}" data-key="${key}">`;
                 if (isMissing) {
@@ -392,8 +629,8 @@ class DataSeederApp {
                 const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
                 const type = isNumber ? 'number' : 'text';
                 const step = isNumber ? 'any' : '';
-                const safeValue = value.toString().replace(/"/g, '&quot;'); 
-                
+                const safeValue = value.toString().replace(/"/g, '&quot;');
+
                 inputHtml = `<input type="${type}" step="${step}" class="preview-input${missingClass}" data-key="${key}" value="${safeValue}" placeholder="(Blank)">`;
             }
 
@@ -401,10 +638,10 @@ class DataSeederApp {
         }
 
         const leftKeys = product.action === 'create'
-            ? ['manufacturer', 'productName', 'shortName', 'productCode', 'barcode', 'hl7Reference', 'hl7Fortifier']
+            ? ['manufacturer', 'productName', 'shortName', 'productCode', 'hl7Reference', 'hl7Fortifier']
             : orderedKeys.filter((_, index) => index % 2 === 0);
         const rightKeys = product.action === 'create'
-            ? ['productType', 'productUse', 'categoryId', 'caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'measurementUnit']
+            ? ['productType', 'useContexts', 'categoryId', 'caloricValue', 'displacement', 'expirationOpened', 'measurementUnit']
             : orderedKeys.filter((_, index) => index % 2 !== 0);
 
         for (const key of leftKeys) {
@@ -414,9 +651,9 @@ class DataSeederApp {
         for (const key of rightKeys) {
             if (fieldMarkup[key]) html += fieldMarkup[key];
         }
-        html += '</div></div>';
+        html += '</div></div></div>';
 
-        // --- ONLY SHOW HIERARCHY TABLE FOR CREATE AND ADD-FORM-FACTOR ---
+        // Hierarchy editor for Create and Add Form Factor
         if (product.action === 'create' || product.action === 'add-form-factor') {
             html += `
             <section class="tmnp-packaging-section">
@@ -429,7 +666,7 @@ class DataSeederApp {
                     <div class="tmnp-hierarchy-content">
                         <div class="tmnp-hierarchy-title">Form Factor(s)</div>
             `;
-            
+
             const displayHierarchy = product.hierarchy
                 .map((formFactor, storageIndex) => ({ formFactor, storageIndex }))
                 .reverse();
@@ -446,9 +683,9 @@ class DataSeederApp {
                             : 'Nested Container';
 
                 let typeSelect = `<select class="preview-input hierarchy-input${missingClass}" data-hierarchy-index="${storageIndex}" data-key="containerId">`;
-                
+
                 if (isMissing) typeSelect += `<option value="" selected disabled>Select Type...</option>`;
-                
+
                 for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
                     const selected = (ff.containerId.toString() === optVal.toString()) ? 'selected' : '';
                     typeSelect += `<option value="${optVal}" ${selected}>${optLabel}</option>`;
@@ -485,17 +722,106 @@ class DataSeederApp {
             </section>`;
         }
 
-        document.getElementById('previewTitle').textContent = `Edit: ${product.productName || 'Product'}`;
+        // Container updates editor for Update Item / Form Factor
+        if (product.action === 'update-form-factor') {
+            const updates = Array.isArray(product.containerUpdates) ? product.containerUpdates : [];
+            html += `
+            <section class="tmnp-packaging-section">
+                <h4 class="tmnp-section-heading">Container / Form Factor Updates</h4>
+                <div class="tmnp-hierarchy-card">
+                    <div class="tmnp-product-summary">
+                        <div><strong>Target Item #:</strong> ${product.productCode || product.lookupBarcode || 'By Barcode'}</div>
+                        <div><strong>Product:</strong> ${product.productName || '(Auto-resolved)'}</div>
+                    </div>
+                    <div class="tmnp-hierarchy-content">
+            `;
+
+            updates.forEach((cu, idx) => {
+                const targetOpts = [
+                    { value: 'leaf', label: 'Leaf (Smallest Unit)' },
+                    { value: 'outer', label: 'Outer Container' },
+                    { value: 'by-barcode', label: 'Match by Barcode' }
+                ].map(o => `<option value="${o.value}" ${cu.target === o.value ? 'selected' : ''}>${o.label}</option>`).join('');
+
+                let typeOpts = `<option value="" ${!cu.newContainerType ? 'selected' : ''}>Keep Current</option>`;
+                for (const [optVal, optLabel] of Object.entries(mappings.containerType)) {
+                    typeOpts += `<option value="${optVal}" ${(cu.newContainerType || '').toString() === optVal ? 'selected' : ''}>${optLabel}</option>`;
+                }
+
+                html += `
+                    <div class="tmnp-container-update-row">
+                        <label class="tmnp-inline-field"><span>Target Level</span>
+                            <select class="preview-input cu-preview-input" data-cu-index="${idx}" data-key="target">${targetOpts}</select>
+                        </label>
+                        <label class="tmnp-inline-field"><span>Current Barcode</span>
+                            <input type="text" class="preview-input cu-preview-input" data-cu-index="${idx}" data-key="currentBarcode" value="${(cu.currentBarcode || '').replace(/"/g, '&quot;')}" placeholder="Required if by-barcode">
+                        </label>
+                        <label class="tmnp-inline-field"><span>New Type</span>
+                            <select class="preview-input cu-preview-input" data-cu-index="${idx}" data-key="newContainerType">${typeOpts}</select>
+                        </label>
+                        <label class="tmnp-inline-field"><span>New Barcode</span>
+                            <input type="text" class="preview-input cu-preview-input" data-cu-index="${idx}" data-key="newBarcode" value="${(cu.newBarcode || '').replace(/"/g, '&quot;')}" placeholder="Leave blank to keep">
+                        </label>
+                        <label class="tmnp-inline-field"><span>New Qty</span>
+                            <input type="number" class="preview-input cu-preview-input" data-cu-index="${idx}" data-key="newQuantity" value="${cu.newQuantity || ''}" placeholder="Keep">
+                        </label>
+                        <div class="tmnp-remove-control">
+                            <button type="button" class="remove-preview-cu-btn" data-index="${idx}" title="Remove Container Update">&times;</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    <button type="button" class="tmnp-add-container-btn" id="addPreviewContainerUpdateBtn">+ Add Container Update</button>
+                </div>
+            </div>
+            </section>`;
+        }
+
+        const displayTitle = product.productName || product.itemName || product.productCode || product.lookupBarcode || 'Entry';
+        document.getElementById('previewTitle').textContent = `Edit: ${displayTitle}`;
         detailsContainer.innerHTML = html;
-        
-        // Attach listeners to buttons
+
+        // Wire Use Contexts checkbox & Standard/Custom radio toggles inside Preview Modal
+        detailsContainer.querySelectorAll('.preview-use-context-cb').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const isAdd = Array.from(detailsContainer.querySelectorAll('.preview-use-context-cb:checked'))
+                    .some(el => el.value === 'additive');
+                const panel = document.getElementById('previewAdditiveContextPanel');
+                if (panel) panel.classList.toggle('hidden', !isAdd);
+            });
+        });
+
+        detailsContainer.querySelectorAll('.preview-additive-method').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const customBox = document.getElementById('previewAdditiveCustomFields');
+                if (customBox) customBox.classList.toggle('hidden', radio.value !== 'custom');
+            });
+        });
+
+        const previewUnitSel = detailsContainer.querySelector('.preview-input[data-key="measurementUnit"]');
+        if (previewUnitSel) {
+            previewUnitSel.addEventListener('change', () => {
+                const stdLbl = document.getElementById('previewStandardUnitLabel');
+                if (stdLbl) stdLbl.textContent = `Standard Units (${formatUnitDisplayLabel(previewUnitSel.value)})`;
+            });
+        }
+
         const addContainerBtn = document.getElementById('addPreviewContainerBtn');
         if (addContainerBtn) addContainerBtn.onclick = () => this.addPreviewFormFactor();
 
         document.querySelectorAll('.remove-preview-ff-btn').forEach(btn => {
             btn.onclick = (e) => this.removePreviewFormFactor(parseInt(e.target.dataset.index, 10));
         });
-        
+
+        const addCuBtn = document.getElementById('addPreviewContainerUpdateBtn');
+        if (addCuBtn) addCuBtn.onclick = () => this.addPreviewContainerUpdate();
+
+        document.querySelectorAll('.remove-preview-cu-btn').forEach(btn => {
+            btn.onclick = (e) => this.removePreviewContainerUpdate(parseInt(e.target.dataset.index, 10));
+        });
+
         const closeBtn = document.getElementById('closePreviewBtn');
         closeBtn.textContent = 'Save Changes';
         closeBtn.classList.remove('btn-secondary');
@@ -503,131 +829,141 @@ class DataSeederApp {
 
         document.getElementById('previewModal').classList.remove('hidden');
     }
-    savePreviewChanges() {
-        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
-        
-        const product = this.products[this.editingProductIndex];
-        if (!product) return;
 
-        // Save standard fields
-        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
+    scrapePreviewModalInputs(product) {
+        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input):not(.cu-preview-input)');
         standardInputs.forEach(input => {
             const key = input.dataset.key;
             let val = input.value;
-            
-            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
+            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume', 'atomicUnits', 'decimalPlaces'].includes(key);
             if (isNumber) val = parseFloat(val) || 0;
-            
             product[key] = val;
         });
 
-        // Save hierarchy fields if they exist
+        const previewUcCheckboxes = document.querySelectorAll('#previewDetails .preview-use-context-cb');
+        if (previewUcCheckboxes.length > 0) {
+            product.useContexts = Array.from(previewUcCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+
+            const methodRadio = document.querySelector('#previewDetails .preview-additive-method:checked');
+            product.additiveMethod = methodRadio ? methodRadio.value : 'standard';
+            if (product.additiveMethod === 'standard') {
+                const uom = product.measurementUnit || 'ml';
+                product.additiveUnit = uom;
+                product.atomicUnits = 1;
+                product.decimalPlaces = uom === 'g' ? 1 : 0;
+            }
+        }
+
         if (product.hierarchy) {
             const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
             hierarchyInputs.forEach(input => {
                 const index = parseInt(input.dataset.hierarchyIndex, 10);
                 const key = input.dataset.key;
                 let val = input.value;
-                
                 if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
-                
-                product.hierarchy[index][key] = val;
+                if (product.hierarchy[index]) product.hierarchy[index][key] = val;
             });
         }
 
+        if (product.action === 'update-form-factor') {
+            if (!Array.isArray(product.containerUpdates)) product.containerUpdates = [];
+            const cuInputs = document.querySelectorAll('#previewDetails .cu-preview-input');
+            cuInputs.forEach(input => {
+                const index = parseInt(input.dataset.cuIndex, 10);
+                const key = input.dataset.key;
+                let val = input.value;
+                if (key === 'newQuantity') val = val !== '' ? (parseInt(val, 10) || 0) : '';
+                if (product.containerUpdates[index]) product.containerUpdates[index][key] = val;
+            });
+        }
+    }
+
+    savePreviewChanges() {
+        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
+
+        const product = this.products[this.editingProductIndex];
+        if (!product) return;
+
+        this.scrapePreviewModalInputs(product);
         this.renderProductsTable();
+        this.saveProgress();
         this.showStatus('Product updated successfully!', 'success');
         this.editingProductIndex = null;
     }
+
     addPreviewFormFactor() {
         if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
         const product = this.products[this.editingProductIndex];
         if (!product) return;
 
-        // 1. Scrape current inputs so we don't lose unsaved changes on refresh
-        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
-        standardInputs.forEach(input => {
-            const key = input.dataset.key;
-            let val = input.value;
-            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
-            if (isNumber) val = parseFloat(val) || 0;
-            product[key] = val;
-        });
-
-        if (product.hierarchy) {
-            const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
-            hierarchyInputs.forEach(input => {
-                const index = parseInt(input.dataset.hierarchyIndex, 10);
-                const key = input.dataset.key;
-                let val = input.value;
-                if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
-                product.hierarchy[index][key] = val;
-            });
-        }
-
-        // 2. Add a new blank outer container to the array
+        this.scrapePreviewModalInputs(product);
         if (!product.hierarchy) product.hierarchy = [];
         product.hierarchy.push({
-            containerId: '', // Blank so it triggers your yellow warning highlight!
+            containerId: '',
             barcode: '',
             quantity: 0,
             volume: 0
         });
-
-        // 3. Refresh the modal
         this.previewProduct(this.editingProductIndex);
     }
+
     removePreviewFormFactor(index) {
         if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
         const product = this.products[this.editingProductIndex];
         if (!product || !product.hierarchy) return;
 
-        // Scrape current inputs to prevent losing unsaved data
-        const standardInputs = document.querySelectorAll('#previewDetails .preview-input:not(.hierarchy-input)');
-        standardInputs.forEach(input => {
-            const key = input.dataset.key;
-            let val = input.value;
-            const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume'].includes(key);
-            if (isNumber) val = parseFloat(val) || 0;
-            product[key] = val;
-        });
-
-        const hierarchyInputs = document.querySelectorAll('#previewDetails .hierarchy-input');
-        hierarchyInputs.forEach(input => {
-            const i = parseInt(input.dataset.hierarchyIndex, 10);
-            // Skip the row we are about to delete
-            if (i === index) return; 
-            
-            const key = input.dataset.key;
-            let val = input.value;
-            if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
-            product.hierarchy[i][key] = val;
-        });
-
-        // Remove the row from the array
+        this.scrapePreviewModalInputs(product);
         product.hierarchy.splice(index, 1);
-
-        // Refresh the modal
         this.previewProduct(this.editingProductIndex);
     }
+
+    addPreviewContainerUpdate() {
+        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
+        const product = this.products[this.editingProductIndex];
+        if (!product) return;
+
+        this.scrapePreviewModalInputs(product);
+        if (!Array.isArray(product.containerUpdates)) product.containerUpdates = [];
+        product.containerUpdates.push({
+            target: 'leaf',
+            currentBarcode: '',
+            newContainerType: '',
+            newBarcode: '',
+            newQuantity: ''
+        });
+        this.previewProduct(this.editingProductIndex);
+    }
+
+    removePreviewContainerUpdate(index) {
+        if (this.editingProductIndex === undefined || this.editingProductIndex === null) return;
+        const product = this.products[this.editingProductIndex];
+        if (!product || !Array.isArray(product.containerUpdates)) return;
+
+        this.scrapePreviewModalInputs(product);
+        product.containerUpdates.splice(index, 1);
+        this.previewProduct(this.editingProductIndex);
+    }
+
     async handleDocUpload(event) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
         const errorEl = document.getElementById('docParseError');
         errorEl.style.display = 'none';
-        errorEl.textContent = ''; // Clear previous errors
-        
+        errorEl.textContent = '';
+
         this.showStatus(`Reading ${files.length} document(s) offline...`, 'info');
 
         let successCount = 0;
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            
+
             try {
                 let text = '';
-                
+
                 if (file.name.toLowerCase().endsWith('.txt')) {
                     text = await file.text();
                 } else if (file.name.toLowerCase().endsWith('.docx')) {
@@ -645,7 +981,6 @@ class DataSeederApp {
                     throw new Error('Document is empty or could not be read.');
                 }
 
-                // Process and add to the table
                 this.processExtractedDocText(text, file.name);
                 successCount++;
 
@@ -654,7 +989,7 @@ class DataSeederApp {
                 errorEl.style.display = 'block';
             }
         }
-        
+
         if (successCount > 0 && successCount === files.length) {
             this.showStatus(`Successfully extracted ${successCount} document(s)!`, 'success');
         } else if (successCount > 0) {
@@ -662,8 +997,7 @@ class DataSeederApp {
         } else {
             this.showStatus('Failed to read documents.', 'error');
         }
-        
-        // Reset the file input so the user can upload again
+
         event.target.value = '';
     }
 
@@ -681,29 +1015,28 @@ class DataSeederApp {
 
             const boundaryRegex = new RegExp(`(${knownLabels.join('|')})`, 'gi');
             const parts = text.split(boundaryRegex);
-            
+
             const extractedData = {};
             for (let i = 1; i < parts.length; i += 2) {
                 const label = parts[i].trim().toLowerCase();
                 let value = parts[i + 1] || '';
-                
-                value = value.replace(/\|/g, ' '); 
-                value = value.replace(/\([^)]+\)/g, ' '); 
+
+                value = value.replace(/\|/g, ' ');
+                value = value.replace(/\([^)]+\)/g, ' ');
                 value = value.replace(/only applies of this product will be ordered with in a range of cals example 1-45 cal/ig, '');
                 value = value.replace(/(?:Ready-to-Feed, Liquid Concentrate, and\/or or Powder; list all that apply)/ig, '');
                 value = value.replace(/(?:Base, Fortifier, and\/or Modular; list all that apply)/ig, '');
                 value = value.replace(/(?:Case, Carton, Bottle, Can, Packet)/ig, '');
                 value = value.replace(/the outermost container/ig, '');
                 value = value.replace(/the containers found within/ig, '');
-                value = value.replace(/see screenshot provided/ig, ''); 
-                
+                value = value.replace(/see screenshot provided/ig, '');
+
                 extractedData[label] = value.trim();
             }
 
             const getVal = (key) => {
                 let val = extractedData[key.toLowerCase()] || '';
                 let cleanVal = val.trim().toLowerCase();
-                // Strip out common "not applicable" strings so the field stays blank
                 return (cleanVal === 'na' || cleanVal === 'n/a' || cleanVal === 'none' || cleanVal === 'null') ? '' : val.trim();
             };
 
@@ -723,48 +1056,42 @@ class DataSeederApp {
             const rawHl7Fort = getVal('Fortifier HL7 Reference Code');
             const rawContainer = getVal('Type of Container');
             const rawVolume = `${getVal('Unit Volume')} ${getVal('Volume')}`;
-            const rawBarcode2D = getVal('2D barcode') || getVal('Barcode'); 
-            
+            const rawBarcode2D = getVal('2D barcode') || getVal('Barcode');
+
             const isRawHl7Message = (str) => {
                 if (!str) return false;
                 const upperStr = str.toUpperCase();
-                return upperStr.includes('MSH|') || 
-                       upperStr.includes('MSH^') || 
-                       upperStr.includes('PID|') || 
-                       (str.match(/\^/g) || []).length > 3; 
+                return upperStr.includes('MSH|') ||
+                       upperStr.includes('MSH^') ||
+                       upperStr.includes('PID|') ||
+                       (str.match(/\^/g) || []).length > 3;
             };
 
             const cleanHl7Base = isRawHl7Message(rawHl7Base) ? '' : rawHl7Base;
             const cleanHl7Fort = isRawHl7Message(rawHl7Fort) ? '' : rawHl7Fort;
-            
+
             if (!rawName) {
                 throw new Error('Could not find "Display Name". Ensure the uploaded .docx matches the Timeless form format.');
             }
 
-            let typeId = '1'; 
+            let typeId = '1';
             const tLower = rawType.toLowerCase();
             if (tLower.includes('powder')) typeId = '3';
             else if (tLower.includes('concentrate')) typeId = '2';
             else if (tLower.includes('liquid') || tLower.includes('rtf') || tLower.includes('ready')) typeId = '1';
 
-            let useVal = 'base';
-            let catId = '3'; 
-            if (rawUse.toLowerCase().includes('fortifier')) {
-                useVal = 'fortifier';
-                catId = '5'; 
-            } else if (rawUse.toLowerCase().includes('modular')) {
-                useVal = 'modular';
-                catId = '5';
+            const useLower = rawUse.toLowerCase();
+            const useContexts = [];
+            if (useLower.includes('base')) useContexts.push('feed-base');
+            if (useLower.includes('fortifier') || useLower.includes('additive')) useContexts.push('additive');
+            if (useLower.includes('modular')) {
+                if (!useContexts.includes('additive')) useContexts.push('additive');
+                useContexts.push('modular');
             }
+            if (useContexts.length === 0) useContexts.push('feed-base');
 
-            let containerId = '1'; 
-            const cLower = rawContainer.toLowerCase();
-            if (cLower.includes('carton')) containerId = '2';
-            else if (cLower.includes('can')) containerId = '3';
-            else if (cLower.includes('case')) containerId = '4';
-            else if (cLower.includes('packet')) containerId = '6';
-            else if (cLower.includes('tetra')) containerId = '10';
-            else if (cLower.includes('bottle')) containerId = '1';
+            const catId = useContexts.includes('additive') && !useContexts.includes('feed-base') ? '5' : '3';
+            const containerId = resolveContainerTypeId(rawContainer, '1');
 
             const caloricMatch = rawCaloric.match(/[\d.]+/);
             let caloricVal = 0;
@@ -782,7 +1109,7 @@ class DataSeederApp {
             if (rawVolume.toLowerCase().includes('g')) unitVal = 'g';
             else if (rawVolume.toLowerCase().includes('oz')) unitVal = 'oz';
 
-            let expOpenHours = 0; 
+            let expOpenHours = 0;
             if (rawExpOpen) {
                 const expMatch = rawExpOpen.match(/[\d.]+/);
                 if (expMatch && expMatch[0] !== '.') {
@@ -800,15 +1127,13 @@ class DataSeederApp {
                 }
             }
 
-            // NEW: Parse the Container Hierarchy Table (Strict Matching)
             const containerTypesRaw = getVal('Type of Container (Case, Carton, Bottle, Can, Packet)') || getVal('Type of Container');
             const barcodesRaw = extractedData['barcode'] || '';
             const quantitiesRaw = getVal('Number of Containers');
             const volumesRaw = getVal('Volume');
 
-            // Safely extract only what we care about, ignoring 'n/a', labels, and spaces
-            const types = (containerTypesRaw.match(/(bottle|carton|can|case|packet|tetra)/gi) || []).map(s => s.toLowerCase());
-            const barcodes = barcodesRaw.match(/\d{5,}/g) || []; // Matches long numbers
+            const types = (containerTypesRaw.match(/\b(tetra\s*prisma|tetra\s*brik|tetra(?:\s*pak)?|bottle|carton|can|case|vial|packet|pack|sachet|tub|pouch|bag|box|cup|stick)\b/gi) || []).map(s => s.toLowerCase());
+            const barcodes = barcodesRaw.match(/\d{5,}/g) || [];
             const quantities = quantitiesRaw.match(/\d+(\.\d+)?/g) || [];
             const volumes = volumesRaw.match(/\d+(\.\d+)?/g) || [];
 
@@ -816,16 +1141,7 @@ class DataSeederApp {
             const maxCols = Math.max(types.length, barcodes.length, quantities.length, volumes.length);
 
             for (let i = 0; i < maxCols; i++) {
-                let cid = ''; 
-                const typeLower = types[i] || '';
-                
-                if (typeLower.includes('bottle')) cid = '1';
-                else if (typeLower.includes('carton')) cid = '2';
-                else if (typeLower.includes('can')) cid = '3';
-                else if (typeLower.includes('case')) cid = '4';
-                else if (typeLower.includes('packet')) cid = '6';
-                else if (typeLower.includes('tetra')) cid = '10';
-
+                const cid = resolveContainerTypeId(types[i] || '', '');
                 const bc = barcodes[i] || '';
                 const qty = parseInt(quantities[i]) || (i === maxCols - 1 ? 1 : 0);
                 const vol = parseFloat(volumes[i]) || 0;
@@ -835,37 +1151,40 @@ class DataSeederApp {
                 }
             }
 
-            // Reverse so the innermost unit is at the top of the UI
             const hierarchy = formFactors.reverse();
 
             const product = {
                 action: 'create',
                 manufacturer: rawMfg,
                 productName: rawName,
-                shortName: rawName, 
+                shortName: rawName,
                 productCode: rawItemNum,
                 barcode: rawBarcode2D,
                 productType: typeId,
-                productUse: useVal,
+                useContexts: useContexts,
+                additiveMethod: 'standard',
+                additiveUnit: unitVal,
+                atomicUnits: 1,
+                decimalPlaces: unitVal === 'g' ? 1 : 0,
                 categoryId: catId,
                 caloricValue: caloricVal,
                 displacement: dispVal,
                 expirationOpened: expOpenHours,
-                expirationPrepared: expPrepHours,
+                expirationPrepared: useContexts.includes('additive') ? (expPrepHours || 48) : 0,
                 containerType: containerId,
                 unitQuantity: 1,
                 measurementVolume: volVal,
                 hl7Reference: cleanHl7Base,
                 hl7Fortifier: cleanHl7Fort,
                 measurementUnit: unitVal,
-                hierarchy: hierarchy // NEW: Hierarchy array attached here
+                hierarchy: hierarchy
             };
 
             this.currentAction = 'create';
             this.products.push(product);
             this.renderProductsTable();
             this.saveProgress();
-            
+
             this.showStatus(`Extracted ${rawName} from document!`, 'success');
 
         } catch (error) {
@@ -875,41 +1194,38 @@ class DataSeederApp {
             this.showStatus('Mapping failed.', 'error');
         }
     }
-    updateApiSelectionCount() {
 
+    updateApiSelectionCount() {
         const checked = document.querySelectorAll('.api-product-cb:checked').length;
         document.getElementById('apiSelectedCount').textContent = `${checked} product(s) selected`;
         document.getElementById('stageSelectedApiBtn').disabled = checked === 0;
     }
+
     setupEventListeners() {
-        // Output Tabs logic
         document.querySelectorAll('.output-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
-                // Update active button styling
                 document.querySelectorAll('.output-tab').forEach(btn => {
                     btn.classList.remove('btn-primary');
                     btn.classList.add('btn-secondary');
                 });
                 e.target.classList.remove('btn-secondary');
                 e.target.classList.add('btn-primary');
-                
-                // Switch the content instantly
+
                 this.switchOutputFormat(e.target.dataset.format);
             });
         });
+
         document.getElementById('dismissPreviewBtn').addEventListener('click', () => {
-            // Simply hide the modal without calling savePreviewChanges()
             document.getElementById('previewModal').classList.add('hidden');
         });
-        // --- INSTANT STAGE / UNSTAGE CHECKBOX LOGIC ---
+
         document.getElementById('apiResultsBody').addEventListener('change', async (e) => {
             if (!e.target.classList.contains('api-product-cb')) return;
-            
+
             const cb = e.target;
             const itemId = cb.value;
 
             if (cb.checked) {
-                // ADD TO BATCH
                 try {
                     cb.disabled = true;
                     this.showStatus('Fetching details...', 'info');
@@ -918,7 +1234,7 @@ class DataSeederApp {
                     if (detailedItems && detailedItems.length > 0) {
                         const apiItem = detailedItems[0];
                         const basicData = apiService.cachedProducts.find(p => p.ItemID.toString() === itemId.toString()) || {};
-                        
+
                         let calValue = 20;
                         if (apiItem.Nutrients && Array.isArray(apiItem.Nutrients)) {
                             const calObj = apiItem.Nutrients.find(n => (n.Description || '').toLowerCase().includes('calorie'));
@@ -927,18 +1243,12 @@ class DataSeederApp {
 
                         let hierarchy = [];
                         if (basicData.PrimaryPackage) {
-                            let cId = '1';
-                            const pkg = basicData.PrimaryPackage.toLowerCase();
-                            if (pkg.includes('carton')) cId = '2';
-                            else if (pkg.includes('can')) cId = '3';
-                            else if (pkg.includes('case')) cId = '4';
-                            else if (pkg.includes('packet')) cId = '6';
-
+                            const cId = resolveContainerTypeId(basicData.PrimaryPackage, '1');
                             hierarchy.push({ containerId: cId, barcode: basicData.PrimaryBarcode || '', quantity: 1, volume: parseFloat(basicData.Displacement) || 0 });
                         }
 
                         this.products.push({
-                            apiItemId: itemId.toString(), 
+                            apiItemId: itemId.toString(),
                             action: 'create',
                             manufacturer: 'Undefined',
                             productName: (basicData.FamilyName || 'Imported Product').replace(/[®™©]/g, '').trim(),
@@ -946,12 +1256,16 @@ class DataSeederApp {
                             productCode: apiItem.ItemNumber || basicData.ItemNumber || '',
                             barcode: basicData.PrimaryBarcode || '',
                             productType: (basicData.FormType || '').toLowerCase().includes('powder') ? '3' : '1',
-                            productUse: 'base',
+                            useContexts: ['feed-base'],
+                            additiveMethod: 'standard',
+                            additiveUnit: 'ml',
+                            atomicUnits: 1,
+                            decimalPlaces: 0,
                             categoryId: '3',
                             caloricValue: calValue,
                             displacement: parseFloat(basicData.Displacement) || 0,
                             expirationOpened: 48,
-                            expirationPrepared: 48,
+                            expirationPrepared: 0,
                             measurementUnit: 'ml',
                             hierarchy: hierarchy.length > 0 ? hierarchy : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }]
                         });
@@ -962,12 +1276,11 @@ class DataSeederApp {
                     }
                 } catch (error) {
                     this.showStatus(error.message, 'error');
-                    cb.checked = false; 
+                    cb.checked = false;
                 } finally {
                     cb.disabled = false;
                 }
             } else {
-                // REMOVE FROM BATCH
                 const index = this.products.findIndex(p => p.apiItemId === itemId.toString());
                 if (index !== -1) {
                     this.products.splice(index, 1);
@@ -978,37 +1291,33 @@ class DataSeederApp {
             }
             this.updateApiSelectionCount();
         });
-        // --- REAL-TIME TYPING SEARCH LOGIC ---
+
         const searchInput = document.getElementById('apiSearchInput');
         if (searchInput) {
             searchInput.addEventListener('input', () => this.refreshApiGrid());
         }
-        // --- SWITCH FOLDER LOGIC ---
+
         document.getElementById('changeFolderBtn').addEventListener('click', async () => {
-            // Fix: Removed 'window.' and use the same check your other functions use
             if (typeof fsAccessManager === 'undefined' || !fsAccessManager.isSupported()) {
                 this.showStatus('File system access not supported on this browser.', 'error');
                 return;
             }
-            
+
             try {
-                // 1. Force the prompt to open regardless of what is saved
                 this.showStatus('Select your master project folder...', 'info');
                 const newRootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                
-                // Persist under the same key used by build detection.
+
                 await fsAccessManager.setStoredHandle(fsAccessManager.rootKey, newRootHandle);
-                
-                // 3. Re-run the folder detection to verify the new path
+
                 await this.ensureSeedersFolder();
                 this.rememberBuild();
                 this.showStatus(`Folder updated to: ${newRootHandle.name}`, 'success');
-                
+
             } catch (error) {
                 console.warn('Folder switch cancelled:', error);
             }
         });
-        // --- LOAD CATALOG & PROGRESS BAR LOGIC ---
+
         document.getElementById('apiLoadCatalogBtn').addEventListener('click', async () => {
             if (!apiService.isConfigured()) {
                 this.showStatus('Please configure API settings first.', 'error');
@@ -1027,68 +1336,60 @@ class DataSeederApp {
                 btn.textContent = 'Loading...';
                 progWrapper.style.display = 'block';
                 progBar.style.width = '0%';
-                
+
                 const baseUrl = apiService.config.baseUrl.replace(/\/$/, '');
                 const facId = apiService.config.facilityId;
                 const headers = { 'Authorization': `Bearer ${apiService.config.token}`, 'Content-Type': 'application/json' };
 
-                // 1. Fetch initial page to get TotalRecords
                 const initialUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/0/1`;
                 const response = await fetch(initialUrl, { headers });
                 const json = await response.json();
-                
+
                 let allProducts = json.data?.ProductData || [];
                 const totalRecords = json.data?.TotalRecords || 0;
-                // --- EMPTY DATA CHECK ---
                 if (totalRecords === 0 || allProducts.length === 0) {
                     this.showStatus('No products found for this facility. Please select a different one.', 'error');
-                    
-                    // Open the API settings modal automatically
+
                     document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
                     document.getElementById('apiToken').value = apiService.config.token;
                     document.getElementById('apiSettingsModal').classList.remove('hidden');
-                    
-                    // Reset the load button
+
                     btn.disabled = false;
                     btn.textContent = '⬇️ Load Catalog';
                     progWrapper.style.display = 'none';
-                    return; // Stop execution so it doesn't save an empty array
+                    return;
                 }
                 const limit = json.data?.Limit || 10;
                 let loadedCount = limit;
 
-                // 2. Fetch remaining pages and update progress bar
                 if (totalRecords > limit) {
                     const fetchPromises = [];
                     for (let offset = limit; offset < totalRecords; offset += limit) {
                         const pageUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/${offset}/1`;
-                        
+
                         const req = fetch(pageUrl, { headers }).then(res => res.json()).then(pageJson => {
                             allProducts = allProducts.concat(pageJson.data?.ProductData || []);
                             loadedCount += limit;
-                            
-                            // Calculate and update progress
+
                             const percentage = Math.min(100, Math.round((loadedCount / totalRecords) * 100));
                             progBar.style.width = `${percentage}%`;
                             progText.textContent = `Downloading... ${percentage}%`;
                         }).catch(e => console.warn(e));
-                        
+
                         fetchPromises.push(req);
                     }
-                    await Promise.all(fetchPromises); // Wait for all pages to finish downloading
+                    await Promise.all(fetchPromises);
                 }
 
-                // 3. Save to memory and IndexedDB
                 apiService.cachedProducts = allProducts;
                 if (typeof idbKeyval !== 'undefined') {
                     await idbKeyval.set('cachedApiProducts', allProducts);
                 }
 
-                // 4. Update UI
                 progBar.style.width = '100%';
                 progText.textContent = 'Complete!';
                 searchInput.disabled = false;
-                
+
                 btn.innerHTML = '✅ Products Ready';
                 btn.style.background = '#ecfdf5';
                 btn.style.color = '#065f46';
@@ -1105,11 +1406,10 @@ class DataSeederApp {
                 progWrapper.style.display = 'none';
             }
         });
-        // API Settings Modal Listeners
+
         const apiModal = document.getElementById('apiSettingsModal');
-        
+
         document.getElementById('openApiSettingsBtn').addEventListener('click', () => {
-            // Load current config into inputs
             document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
             document.getElementById('apiToken').value = apiService.config.token;
             document.getElementById('facilitySelectionWrapper').classList.add('hidden');
@@ -1120,12 +1420,11 @@ class DataSeederApp {
             apiModal.classList.add('hidden');
         });
 
-        // Test Connection & Fetch API 1
         document.getElementById('testApiConnectionBtn').addEventListener('click', async () => {
             const baseUrl = document.getElementById('apiBaseUrl').value.trim();
             const token = document.getElementById('apiToken').value.trim();
             const btn = document.getElementById('testApiConnectionBtn');
-            
+
             if (!baseUrl || !token) {
                 this.showStatus('URL and Token are required', 'error');
                 return;
@@ -1134,16 +1433,14 @@ class DataSeederApp {
             try {
                 btn.textContent = 'Connecting...';
                 btn.disabled = true;
-                
+
                 const facilities = await apiService.fetchFacilities(baseUrl, token);
-                
-                // Populate dropdown
+
                 const select = document.getElementById('apiFacilitySelect');
-                select.innerHTML = facilities.map(f => 
+                select.innerHTML = facilities.map(f =>
                     `<option value="${f.FacilityID}">${f.FacilityName} (${f.EnterpriseName})</option>`
                 ).join('');
-                
-                // Auto-select previously saved facility if it exists
+
                 if (apiService.config.facilityId) {
                     select.value = apiService.config.facilityId;
                 }
@@ -1158,7 +1455,6 @@ class DataSeederApp {
             }
         });
 
-        // Save Settings
         document.getElementById('saveApiSettingsBtn').addEventListener('click', () => {
             const select = document.getElementById('apiFacilitySelect');
             apiService.saveConfig({
@@ -1170,11 +1466,12 @@ class DataSeederApp {
             apiModal.classList.add('hidden');
             this.showStatus('API Configured Successfully!', 'success');
         });
+
         document.getElementById('detectBuildBtn').addEventListener('click', () => this.detectBuild());
         document.getElementById('localUrl').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.detectBuild();
         });
-        
+
         document.getElementById('grantBuildFolderBtn').addEventListener('click', () => this.grantBuildFolderAccess());
 
         document.getElementById('continueBtn').addEventListener('click', () => this.goToStep(2));
@@ -1190,11 +1487,10 @@ class DataSeederApp {
             btn.addEventListener('click', (e) => this.switchFormTab(e.target.dataset.tab));
         });
 
-        // Safely listen for File Uploads
         document.getElementById('docFile').addEventListener('change', (e) => this.handleDocUpload(e));
         document.getElementById('csvFile').addEventListener('change', (e) => this.handleCsvUpload(e));
         document.getElementById('downloadCsvTemplate').addEventListener('click', () => csvHandler.downloadTemplate());
-        
+
         document.getElementById('clearAllBtn').addEventListener('click', () => this.clearAllProducts());
         document.getElementById('generateSeederBtn').addEventListener('click', () => this.generateSeeder());
         document.getElementById('step2BackBtn').addEventListener('click', () => this.goToStep(1));
@@ -1202,7 +1498,6 @@ class DataSeederApp {
         document.getElementById('backToProductsBtn').addEventListener('click', () => this.showOutput(false));
         document.getElementById('newSeederBtn').addEventListener('click', () => this.reset());
 
-        // Modal Close Buttons
         document.getElementById('closeSuccessBtn').addEventListener('click', () => {
             document.getElementById('successModal').classList.add('hidden');
         });
@@ -1214,14 +1509,12 @@ class DataSeederApp {
             document.getElementById('previewModal').classList.add('hidden');
         });
 
-        // Delegate listener for the dynamic buttons in the table
         document.getElementById('productsTableBody').addEventListener('click', (e) => {
-            // Find the closest button element to the click target
             const target = e.target.closest('button');
             if (!target) return;
 
             const index = parseInt(target.getAttribute('data-index'), 10);
-            
+
             if (target.classList.contains('remove-product-btn')) {
                 this.removeProduct(index);
             } else if (target.classList.contains('preview-product-btn')) {
@@ -1284,8 +1577,7 @@ class DataSeederApp {
             document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
 
             document.getElementById('buildDetailsCard').style.display = 'flex';
-            
-            // Attempt to read the folder silently, or prompt if it's the very first time
+
             await this.ensureSeedersFolder(false, runId);
             if (runId !== this.buildDetectionRun) return;
 
@@ -1348,7 +1640,7 @@ class DataSeederApp {
         }
     }
 
-async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
+    async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const isCurrentRun = () => runId === this.buildDetectionRun;
         if (!isCurrentRun()) return;
         this.pendingBuildFolderInfo = null;
@@ -1394,9 +1686,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 return;
             }
 
-            // Check memory for previous connection (triggers browser alert, not Windows Explorer)
             let rootHandle = await fsAccessManager.getRootHandleWithPermission();
-            
+
             if (!rootHandle) {
                 this.showStatus('Select a drive or common parent folder that contains your build folders.', 'info');
                 rootHandle = await fsAccessManager.linkRoot();
@@ -1483,7 +1774,6 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 return;
             }
 
-            // Use the URL-matched folder or resolve it through the vhost DocumentRoot.
             if (!folderResult && documentRoot) {
                 folderResult = await fsAccessManager.getSeedersDirHandle(this.buildInfo, rootHandle, isCurrentRun, documentRoot);
                 if (!isCurrentRun()) return;
@@ -1509,12 +1799,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 ? rootHandle.name
                 : `${rootHandle.name}\\${folderResult.relativePath}`);
             document.getElementById('buildPath').textContent = this.buildInfo.buildPath;
-            
-            // Count the files!
+
             const highest = await fsAccessManager.getHighestSeederNumber(this.seedersDirHandle);
             if (!isCurrentRun()) return;
             this.seederNumber = highest + 1;
-            
+
             this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
             this.updateFolderLinkUI(true, documentRoot
                 ? '✅ Matched Apache vhost and scanned project.'
@@ -1532,11 +1821,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             this.showStatus(error.message || 'Could not locate this build folder.', 'error');
         }
     }
+
     updateFolderLinkUI(linked, message) {
         const statusEl = document.getElementById('folderLinkStatus');
-        
         statusEl.textContent = message;
-        
+
         if (linked) {
             statusEl.classList.add('linked');
             statusEl.style.color = '#10b981';
@@ -1550,7 +1839,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const input = document.getElementById('nextSeederNum');
         if (number) input.value = number;
         else input.value = '';
-        
+
         const badge = document.getElementById('seederNumSource');
         badge.textContent = source;
         if (source === 'action required') {
@@ -1558,6 +1847,25 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             input.focus();
         } else {
             badge.className = 'source-badge verified';
+        }
+    }
+
+    syncAdditiveContextPanel(box) {
+        if (!box) return;
+        const isAdditiveChecked = Array.from(box.querySelectorAll('.use-context-cb:checked'))
+            .some(cb => cb.value === 'additive');
+        const panel = box.querySelector('.additive-context-panel');
+        if (panel) {
+            panel.classList.toggle('hidden', !isAdditiveChecked);
+        }
+    }
+
+    syncAdditiveCustomFields(box) {
+        if (!box) return;
+        const selectedMethod = box.querySelector('.additive-method-radio:checked')?.value || 'standard';
+        const customFields = box.querySelector('.additive-custom-fields');
+        if (customFields) {
+            customFields.classList.toggle('hidden', selectedMethod !== 'custom');
         }
     }
 
@@ -1571,28 +1879,32 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
         const fields = this.getFormFields(actionType);
 
-        if (actionType === 'update') {
+        if (actionType === 'update' || actionType === 'update-form-factor') {
             const layout = document.createElement('div');
             layout.className = 'update-module-container';
 
             const selectorPanel = document.createElement('div');
             selectorPanel.className = 'update-selector-panel';
-            
+
             const helperText = document.createElement('div');
             helperText.className = 'field-selection-hint';
-            helperText.innerHTML = '<strong>Select Fields to Update:</strong> Click the properties you need to change. The input fields will appear below.';
+            helperText.innerHTML = actionType === 'update-form-factor'
+                ? '<strong>Select Item Fields to Update:</strong> Toggle the item properties to change, or add container barcode/type/qty updates below.'
+                : '<strong>Select Fields to Update:</strong> Click the properties you need to change. The input fields will appear below.';
             selectorPanel.appendChild(helperText);
 
             const editorPanel = document.createElement('div');
             editorPanel.className = 'update-editor-panel';
 
+            const trailingFields = [];
             fields.forEach(field => {
-                if (field.name === 'productName') {
-                    // Extract the main product name to sit above the module
-                    gridWrapper.appendChild(this.createFormField(field));
-                } else if (field.type === 'checkbox-group') {
+                if (field.type === 'checkbox-group') {
                     selectorPanel.appendChild(this.createFormField(field));
-                } else if (field.type !== 'conditional-input') {
+                } else if (field.type === 'conditional-input') {
+                    // Rendered dynamically by syncConditionalFieldVisibility()
+                } else if (field.type === 'container-updates') {
+                    trailingFields.push(field);
+                } else {
                     gridWrapper.appendChild(this.createFormField(field));
                 }
             });
@@ -1601,10 +1913,14 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             layout.appendChild(editorPanel);
             gridWrapper.appendChild(layout);
 
+            trailingFields.forEach(field => {
+                gridWrapper.appendChild(this.createFormField(field));
+            });
+
             container.appendChild(gridWrapper);
-            
+
             this.syncConditionalFieldVisibility();
-            const checkboxGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
+            const checkboxGroup = document.querySelector('#productFormFields [data-field-name="updateFields"], #productFormFields [data-field-name="updateItemFields"]');
             if (checkboxGroup) {
                 checkboxGroup.addEventListener('change', () => this.syncConditionalFieldVisibility());
             }
@@ -1616,6 +1932,26 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         });
 
         container.appendChild(gridWrapper);
+
+        // Sync Standard Units label and default custom unit values when main Measurement Unit changes
+        if (actionType === 'create') {
+            const mainUnitSel = container.querySelector('[data-field-name="measurementUnit"]');
+            const stdUnitSpan = container.querySelector('.standard-unit-label');
+            const addUnitSel = container.querySelector('[data-field-name="additiveUnit"]');
+            const decInput = container.querySelector('[data-field-name="decimalPlaces"]');
+            if (mainUnitSel) {
+                mainUnitSel.addEventListener('change', () => {
+                    if (stdUnitSpan) stdUnitSpan.textContent = `Standard Units (${formatUnitDisplayLabel(mainUnitSel.value)})`;
+                    if (addUnitSel) addUnitSel.value = mainUnitSel.value;
+                    if (decInput) decInput.value = mainUnitSel.value === 'g' ? '1' : '0';
+                });
+            }
+            if (addUnitSel && decInput) {
+                addUnitSel.addEventListener('change', () => {
+                    decInput.value = addUnitSel.value === 'g' ? '1' : '0';
+                });
+            }
+        }
     }
 
     getFormFields(actionType) {
@@ -1636,33 +1972,25 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     { value: '2', label: 'Liquid Concentrate' },
                     { value: '1', label: 'Ready-to-Feed Liquid' }
                 ]},
-                { name: 'productUse', label: 'Product Use *', type: 'select', required: true, value: 'base', options: [
-                    { value: 'base', label: 'Base Formula' },
-                    { value: 'fortifier', label: 'Fortifier' },
-                    { value: 'modular', label: 'Modular' }
-                ]},
                 { name: 'categoryId', label: 'Category Override', type: 'select', value: '3', options: [
                     { value: '3', label: 'Formula (Default)' },
                     { value: '5', label: 'Additive / Fortifier' },
                     { value: '1', label: 'EBM' },
                     { value: '2', label: 'DHM' }
                 ]},
+                { name: 'useContexts', label: 'Use Contexts *', type: 'use-contexts', fullWidth: true, value: ['feed-base'] },
 
-                { type: 'section', label: 'Nutrition Details' },
+                { type: 'section', label: 'Nutrition & Expiration' },
                 { name: 'caloricValue', label: 'Caloric Density', type: 'number', value: 20, step: 0.1, numeric: true },
                 { name: 'displacement', label: 'Displacement', type: 'number', value: 0, step: 0.01, numeric: true },
-                
-                { type: 'section', label: 'Expirations' },
                 { name: 'expirationOpened', label: 'Expiration Once Opened (Hours)', type: 'number', value: 48, numeric: true },
-                { name: 'expirationPrepared', label: 'Expiration Once Prepared (Hours)', type: 'number', value: 48, numeric: true },
-
-                { type: 'section', label: 'Packaging' },
                 { name: 'measurementUnit', label: 'Measurement Unit', type: 'select', value: 'ml', options: [
                     { value: 'ml', label: 'mL' },
                     { value: 'g', label: 'g' },
                     { value: 'oz', label: 'oz' }
                 ]},
-                // Replaces the old static inputs with a dynamic builder
+
+                { type: 'section', label: 'Packaging' },
                 { name: 'hierarchy', label: 'Packaging Hierarchy (Outer Container at Top, Smallest Unit at Bottom)', type: 'packaging-hierarchy' }
             ],
             'update': [
@@ -1681,38 +2009,54 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     numeric: field.numeric,
                     placeholder: field.placeholder,
                     options: field.options,
-                    value: field.name === 'manufacturer' ? '' : (field.type === 'select' ? (field.options?.[0]?.value || '') : '')
+                    value: field.value === 'manufacturer' ? '' : (field.type === 'use-contexts' ? (field.defaultValue || ['feed-base']) : (field.type === 'select' ? (field.options?.[0]?.value || '') : ''))
                 }))
             ],
-            'barcode-update': [
-                { name: 'productName', label: 'Product Name *', type: 'text', required: true, fullWidth: true },
-                { name: 'oldProductCode', label: 'Old Barcode *', type: 'text', required: true },
-                { name: 'newProductCode', label: 'New Barcode *', type: 'text', required: true },
+            'update-form-factor': [
+                { type: 'section', label: 'Target Item / Barcode Lookup' },
+                { name: 'productName', label: 'Parent Product Name (Optional)', type: 'text', fullWidth: true, placeholder: 'e.g., Enfamil Infant PWD (narrows lookup)' },
+                { name: 'productCode', label: 'Current Item Number', type: 'text', placeholder: 'e.g., 174004' },
+                { name: 'lookupBarcode', label: 'Or Current Container Barcode', type: 'text', placeholder: 'e.g., 00300871365025' },
+                { name: 'updateItemFields', label: 'Item Fields to Update', type: 'checkbox-group', value: ['itemName', 'measurementVolume'],
+                    options: UPDATE_ITEM_FIELD_DEFINITIONS.map(field => ({ value: field.value, label: field.label }))
+                },
+                ...UPDATE_ITEM_FIELD_DEFINITIONS.map(field => ({
+                    name: field.value,
+                    label: `New ${field.label}`,
+                    type: 'conditional-input',
+                    dependsOn: 'updateItemFields',
+                    dependsValue: field.value,
+                    subtype: field.type,
+                    step: field.step,
+                    numeric: field.numeric,
+                    placeholder: field.placeholder,
+                    options: field.options,
+                    value: field.type === 'select' ? (field.options?.[0]?.value || '') : ''
+                })),
+                { type: 'section', label: 'Container / Form Factor Updates (Barcode, Type, Qty)' },
+                { name: 'containerUpdates', label: 'Target Containers (Leaf, Outer, or By Current Barcode)', type: 'container-updates' }
             ],
-            // --- NEW MODULE: ADD FORM FACTOR ---
             'add-form-factor': [
                 { type: 'section', label: 'Product Identification' },
                 { name: 'productName', label: 'Exact Product Name *', type: 'text', required: true, fullWidth: true },
                 { type: 'section', label: 'New Packaging Hierarchy' },
                 { name: 'hierarchy', label: 'Packaging Hierarchy (Outer Container at Top, Smallest Unit at Bottom)', type: 'packaging-hierarchy' }
             ],
-            // --- NEW MODULE: ADD MANUFACTURER ---
             'add-manufacturer': [
                 { type: 'section', label: 'Manufacturer Details' },
                 { name: 'manufacturerName', label: 'Manufacturer Name (Max 20 chars) *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Abbott' },
                 { name: 'manufacturerDescription', label: 'Full Description *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Abbott Nutrition' }
             ],
-            // --- NEW MODULE: ADD UNIT ---
             'add-unit': [
                 { type: 'section', label: 'Unit Identification' },
                 { name: 'unitName', label: 'Unit Name *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Timeless1NICU' },
                 { name: 'unitADT', label: 'Unit ADT Reference *', type: 'text', required: true, fullWidth: true, placeholder: 'e.g., Timeless1NICU' },
-                
+
                 { type: 'section', label: 'Batch Settings' },
                 { name: 'bmMaxVolume', label: 'Breastmilk Batch Max Volume', type: 'number', value: 0, numeric: true },
                 { name: 'formulaMaxVolume', label: 'Formula Batch Max Volume', type: 'number', value: 900, numeric: true },
                 { name: 'waterMaxVolume', label: 'Sterile Water Batch Max Volume', type: 'number', value: 900, numeric: true },
-                
+
                 { type: 'section', label: 'Prep Cycles & Settings' },
                 { name: 'bmPrepCycle', label: 'Breastmilk Prep Cycle (Hours)', type: 'number', value: 24, numeric: true },
                 { name: 'formulaPrepCycle', label: 'Formula Prep Cycle (Hours)', type: 'number', value: 24, numeric: true },
@@ -1721,6 +2065,96 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         };
         return fields[actionType] || [];
     }
+
+    buildUseContextsWidget(defaultValues = ['feed-base'], currentUnit = 'ml') {
+        const box = document.createElement('div');
+        box.className = 'use-contexts-box';
+        box.dataset.fieldName = 'useContexts';
+
+        const checksRow = document.createElement('div');
+        checksRow.className = 'use-context-checks';
+
+        const activeList = Array.isArray(defaultValues) ? defaultValues : ['feed-base'];
+        USE_CONTEXT_OPTIONS.forEach(opt => {
+            const lbl = document.createElement('label');
+            lbl.className = 'use-context-option';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'use-context-cb';
+            cb.value = opt.value;
+            cb.checked = activeList.includes(opt.value);
+            cb.addEventListener('change', () => this.syncAdditiveContextPanel(box));
+
+            const span = document.createElement('span');
+            span.textContent = opt.label;
+            lbl.append(cb, span);
+            checksRow.appendChild(lbl);
+        });
+
+        const radioGroupName = `additiveMethod_${Math.random().toString(36).slice(2, 8)}`;
+        const unitDisplay = formatUnitDisplayLabel(currentUnit);
+
+        const additivePanel = document.createElement('div');
+        additivePanel.className = `additive-context-panel${activeList.includes('additive') ? '' : ' hidden'}`;
+        additivePanel.innerHTML = `
+            <div class="additive-context-header">Additive Context Information :</div>
+            <div class="additive-context-rows">
+                <div class="additive-context-row">
+                    <div class="additive-row-label">Measurement Method:</div>
+                    <div class="additive-row-control">
+                        <div class="additive-radio-list">
+                            <label class="additive-radio-option">
+                                <input type="radio" name="${radioGroupName}" data-field-name="additiveMethod" class="additive-method-radio" value="standard" checked>
+                                <span class="standard-unit-label">Standard Units (${unitDisplay})</span>
+                            </label>
+                            <label class="additive-radio-option">
+                                <input type="radio" name="${radioGroupName}" data-field-name="additiveMethod" class="additive-method-radio" value="custom">
+                                <span>Custom Units</span>
+                            </label>
+                        </div>
+                        <div class="additive-custom-fields hidden">
+                            <label class="additive-custom-field">
+                                <span>Measurement Unit</span>
+                                <select class="input-field" data-field-name="additiveUnit">
+                                    <option value="ml" ${currentUnit === 'ml' ? 'selected' : ''}>mL</option>
+                                    <option value="g" ${currentUnit === 'g' ? 'selected' : ''}>g</option>
+                                    <option value="oz" ${currentUnit === 'oz' ? 'selected' : ''}>oz</option>
+                                </select>
+                            </label>
+                            <label class="additive-custom-field">
+                                <span>Atomic Units / Unit</span>
+                                <input type="number" step="any" class="input-field" data-field-name="atomicUnits" value="1">
+                            </label>
+                            <label class="additive-custom-field">
+                                <span>Decimal Places</span>
+                                <input type="number" min="0" max="4" class="input-field" data-field-name="decimalPlaces" value="${currentUnit === 'g' ? '1' : '0'}">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="additive-context-row">
+                    <div class="additive-row-label">Hours Until Expiry Once Prepared:</div>
+                    <div class="additive-row-control">
+                        <div class="additive-expiry-inline">
+                            <div class="additive-expiry-input-wrap">
+                                <input type="number" min="1" class="input-field" data-field-name="expirationPrepared" value="48">
+                                <span class="additive-req-star">*</span>
+                            </div>
+                            <span class="additive-expiry-hint">This is the amount of time (in hours) that a container containing this product as an additive will expire.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        additivePanel.querySelectorAll('.additive-method-radio').forEach(radio => {
+            radio.addEventListener('change', () => this.syncAdditiveCustomFields(box));
+        });
+
+        box.append(checksRow, additivePanel);
+        return box;
+    }
+
     addHierarchyRow(container, isInner = false, prepend = false) {
         const row = document.createElement('div');
         row.className = `hierarchy-row manual-hierarchy-row${isInner ? ' is-smallest' : ''}`;
@@ -1734,15 +2168,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const typeSel = document.createElement('select');
         typeSel.className = 'hierarchy-type input-field';
         typeSel.setAttribute('aria-label', 'Container type');
-        typeSel.innerHTML = `
-            <option value="1">Bottle</option>
-            <option value="2">Carton</option>
-            <option value="3">Can</option>
-            <option value="4">Case</option>
-            <option value="6">Packet</option>
-            <option value="10">Tetra Pak</option>
-        `;
-        if (!isInner) typeSel.value = '4'; // Default to Case for outer containers
+        typeSel.innerHTML = CONTAINER_TYPE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+        if (!isInner) typeSel.value = '4';
 
         typeGroup.appendChild(typeSel);
 
@@ -1820,6 +2247,82 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                     : 'Nested Container';
         });
     }
+
+    addContainerUpdateRow(container, preset = {}) {
+        const row = document.createElement('div');
+        row.className = 'container-update-row';
+
+        const targetGroup = document.createElement('label');
+        targetGroup.className = 'manual-hierarchy-field';
+        targetGroup.innerHTML = '<span>Target Container</span>';
+        const targetSel = document.createElement('select');
+        targetSel.className = 'cu-target input-field';
+        targetSel.innerHTML = `
+            <option value="leaf">Leaf Container (Smallest Unit)</option>
+            <option value="outer">Outer Container (Case/Carton)</option>
+            <option value="by-barcode">Match by Current Barcode</option>
+        `;
+        targetSel.value = preset.target || 'leaf';
+        targetGroup.appendChild(targetSel);
+
+        const curBcGroup = document.createElement('label');
+        curBcGroup.className = 'manual-hierarchy-field';
+        curBcGroup.innerHTML = '<span>Current Barcode (if matching)</span>';
+        const curBcIn = document.createElement('input');
+        curBcIn.type = 'text';
+        curBcIn.className = 'cu-current-bc input-field';
+        curBcIn.placeholder = 'Optional for Leaf';
+        curBcIn.value = preset.currentBarcode || '';
+        curBcGroup.appendChild(curBcIn);
+
+        const newTypeGroup = document.createElement('label');
+        newTypeGroup.className = 'manual-hierarchy-field';
+        newTypeGroup.innerHTML = '<span>New Container Type</span>';
+        const newTypeSel = document.createElement('select');
+        newTypeSel.className = 'cu-new-type input-field';
+        newTypeSel.innerHTML = `<option value="">Keep Current Type</option>` +
+            CONTAINER_TYPE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+        newTypeSel.value = preset.newContainerType || '';
+        newTypeGroup.appendChild(newTypeSel);
+
+        const newQtyGroup = document.createElement('label');
+        newQtyGroup.className = 'manual-hierarchy-field';
+        newQtyGroup.innerHTML = '<span>New Unit Qty</span>';
+        const newQtyIn = document.createElement('input');
+        newQtyIn.type = 'number';
+        newQtyIn.className = 'cu-new-qty input-field';
+        newQtyIn.placeholder = 'Keep current';
+        newQtyIn.value = preset.newQuantity !== undefined && preset.newQuantity !== null ? preset.newQuantity : '';
+        newQtyGroup.appendChild(newQtyIn);
+
+        const newBcGroup = document.createElement('label');
+        newBcGroup.className = 'manual-hierarchy-field cu-span-2';
+        newBcGroup.innerHTML = '<span>New Barcode</span>';
+        const newBcIn = document.createElement('input');
+        newBcIn.type = 'text';
+        newBcIn.className = 'cu-new-bc input-field';
+        newBcIn.placeholder = 'Leave blank to keep existing barcode';
+        newBcIn.value = preset.newBarcode || '';
+        newBcGroup.appendChild(newBcIn);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'manual-hierarchy-remove';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = 'Remove container update';
+        removeBtn.onclick = () => {
+            row.remove();
+            this.saveProgress();
+        };
+
+        targetSel.addEventListener('change', () => {
+            curBcIn.placeholder = targetSel.value === 'by-barcode' ? 'Required current barcode' : 'Optional for Leaf';
+        });
+
+        row.append(targetGroup, curBcGroup, removeBtn, newTypeGroup, newQtyGroup, newBcGroup);
+        container.appendChild(row);
+    }
+
     createFormField(field) {
         if (field.type === 'section') {
             const heading = document.createElement('h4');
@@ -1830,13 +2333,20 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
         const group = document.createElement('div');
         group.className = 'product-form-group';
-        if (field.fullWidth || field.type === 'checkbox-group') group.classList.add('full-width');
+        if (field.fullWidth || field.type === 'checkbox-group' || field.type === 'container-updates' || field.type === 'use-contexts') {
+            group.classList.add('full-width');
+        }
 
-        // Skip adding the standard label for the checkbox group to keep the UI clean
         if (field.type !== 'checkbox-group') {
             const label = document.createElement('label');
             label.textContent = field.label;
             group.appendChild(label);
+        }
+
+        if (field.type === 'use-contexts') {
+            const currentUnit = document.querySelector('#productFormFields [data-field-name="measurementUnit"]')?.value || 'ml';
+            group.appendChild(this.buildUseContextsWidget(field.value || ['feed-base'], currentUnit));
+            return group;
         }
 
         if (field.type === 'select') {
@@ -1889,11 +2399,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             checkboxWrap.dataset.fieldName = field.name;
 
             const selectedValues = Array.isArray(field.value) ? field.value : [];
-            
+
             field.options.forEach(opt => {
                 const row = document.createElement('label');
-                row.className = 'update-toggle-btn'; // No more theme classes
-                
+                row.className = 'update-toggle-btn';
+
                 const isChecked = selectedValues.includes(opt.value);
                 if (isChecked) row.classList.add('selected');
 
@@ -1904,7 +2414,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 checkbox.checked = isChecked;
 
                 checkbox.addEventListener('change', (e) => {
-                    if(e.target.checked) row.classList.add('selected');
+                    if (e.target.checked) row.classList.add('selected');
                     else row.classList.remove('selected');
                 });
 
@@ -1931,6 +2441,12 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             const labelEl = document.createElement('label');
             labelEl.textContent = field.label;
             wrapper.appendChild(labelEl);
+
+            if (field.subtype === 'use-contexts') {
+                const currentUnit = document.querySelector('#productFormFields [data-field-name="measurementUnit"]')?.value || 'ml';
+                wrapper.appendChild(this.buildUseContextsWidget(field.value || ['feed-base'], currentUnit));
+                return wrapper;
+            }
 
             if (field.subtype === 'select') {
                 const select = document.createElement('select');
@@ -1983,6 +2499,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
             return wrapper;
         }
+
         if (field.type === 'packaging-hierarchy') {
             const wrapper = document.createElement('div');
             wrapper.className = 'product-form-group full-width';
@@ -2007,14 +2524,39 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             addBtn.innerHTML = '+ Add Outer Container at Top';
             addBtn.style.width = '100%';
             addBtn.onclick = () => this.addHierarchyRow(listContainer, false, true);
-            
-            wrapper.appendChild(addBtn);
 
-            // Keep the smallest unit as the bottom row.
+            wrapper.appendChild(addBtn);
             this.addHierarchyRow(listContainer, true);
 
             return wrapper;
         }
+
+        if (field.type === 'container-updates') {
+            group.dataset.fieldName = field.name;
+
+            const listContainer = document.createElement('div');
+            listContainer.className = 'container-updates-list';
+            listContainer.style.display = 'flex';
+            listContainer.style.flexDirection = 'column';
+            listContainer.style.gap = '10px';
+            listContainer.style.marginBottom = '10px';
+
+            group.appendChild(listContainer);
+
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'btn btn-secondary btn-small';
+            addBtn.innerHTML = '+ Add Container Update';
+            addBtn.style.width = '100%';
+            addBtn.onclick = () => {
+                this.addContainerUpdateRow(listContainer);
+                this.saveProgress();
+            };
+
+            group.appendChild(addBtn);
+            return group;
+        }
+
         const input = document.createElement('input');
         input.type = field.type || 'text';
         input.dataset.fieldName = field.name;
@@ -2046,7 +2588,9 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
     }
 
     syncConditionalFieldVisibility() {
-        const checkboxGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
+        const actionType = document.getElementById('actionType').value;
+        const groupName = actionType === 'update-form-factor' ? 'updateItemFields' : 'updateFields';
+        const checkboxGroup = document.querySelector(`#productFormFields [data-field-name="${groupName}"]`);
         if (!checkboxGroup) return;
 
         const checkedValues = Array.from(checkboxGroup.querySelectorAll('.field-checkbox:checked'))
@@ -2055,7 +2599,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const editorPanel = document.querySelector('#productFormFields .update-editor-panel');
         if (!editorPanel) return;
 
-        const selectedFields = this.getFormFields('update')
+        const selectedFields = this.getFormFields(actionType)
             .filter(field => field.type === 'conditional-input' && checkedValues.includes(field.dependsValue));
         const selectedNames = new Set(selectedFields.map(field => field.name));
 
@@ -2064,13 +2608,47 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         });
 
         selectedFields.forEach(field => {
-            const exists = editorPanel.querySelector(`.conditional-field[data-field-name="${field.name}"]`);
-            if (!exists) {
-                const element = this.createFormField(field);
-                element.classList.remove('hidden');
+            let element = editorPanel.querySelector(`.conditional-field[data-field-name="${field.name}"]`);
+            if (!element) {
+                element = this.createFormField(field);
                 editorPanel.appendChild(element);
             }
+            element.classList.remove('hidden');
+            element.querySelectorAll('input, select').forEach(ctrl => { ctrl.disabled = false; });
         });
+    }
+
+    collectUseContextsData(containerEl) {
+        const ucBox = containerEl.querySelector('.use-contexts-box');
+        if (!ucBox) return null;
+
+        const contexts = Array.from(ucBox.querySelectorAll('.use-context-cb:checked')).map(cb => cb.value);
+        const mainUom = containerEl.querySelector('[data-field-name="measurementUnit"]')?.value || 'ml';
+        const additiveMethod = ucBox.querySelector('.additive-method-radio:checked')?.value || 'standard';
+
+        const additiveUnit = additiveMethod === 'custom'
+            ? (ucBox.querySelector('[data-field-name="additiveUnit"]')?.value || mainUom)
+            : mainUom;
+        const atomicUnits = additiveMethod === 'custom'
+            ? (parseFloat(ucBox.querySelector('[data-field-name="atomicUnits"]')?.value) || 1)
+            : 1;
+        const decimalPlaces = additiveMethod === 'custom'
+            ? (parseInt(ucBox.querySelector('[data-field-name="decimalPlaces"]')?.value, 10) || 0)
+            : (mainUom === 'g' ? 1 : 0);
+
+        const rawExpPrep = ucBox.querySelector('[data-field-name="expirationPrepared"]')?.value;
+        const expirationPrepared = contexts.includes('additive')
+            ? (parseFloat(rawExpPrep) || 0)
+            : 0;
+
+        return {
+            useContexts: contexts,
+            additiveMethod,
+            additiveUnit,
+            atomicUnits,
+            decimalPlaces,
+            expirationPrepared
+        };
     }
 
     collectFormData() {
@@ -2079,6 +2657,12 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const data = {};
 
         fieldDefs.forEach(field => {
+            if (field.type === 'use-contexts') {
+                const ucData = this.collectUseContextsData(document.getElementById('productFormFields'));
+                if (ucData) Object.assign(data, ucData);
+                return;
+            }
+
             if (field.type === 'checkbox-group') {
                 const selectedValues = Array.from(document.querySelectorAll(`#productFormFields [data-field-name="${field.name}"] .field-checkbox:checked`))
                     .map(el => el.dataset.fieldValue)
@@ -2088,12 +2672,19 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             }
 
             if (field.type === 'conditional-input') {
-                const checkboxGroup = document.querySelector('#productFormFields [data-field-name="updateFields"]');
+                const checkboxGroup = document.querySelector(`#productFormFields [data-field-name="${field.dependsOn}"]`);
                 const selectedValues = Array.from(checkboxGroup ? checkboxGroup.querySelectorAll('.field-checkbox:checked') : [])
                     .map(el => el.dataset.fieldValue)
                     .filter(Boolean);
                 if (!selectedValues.includes(field.dependsValue)) {
-                    data[field.name] = '';
+                    if (field.subtype !== 'use-contexts') {
+                        data[field.name] = '';
+                    }
+                    return;
+                }
+                if (field.subtype === 'use-contexts') {
+                    const ucData = this.collectUseContextsData(document.getElementById('productFormFields'));
+                    if (ucData) Object.assign(data, ucData);
                     return;
                 }
             }
@@ -2109,7 +2700,26 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                         volume: parseFloat(row.querySelector('.hierarchy-vol').value) || 0
                     });
                 });
-                    data[field.name] = hierarchy.reverse();
+                data[field.name] = hierarchy.reverse();
+                return;
+            }
+
+            if (field.type === 'container-updates') {
+                const rows = document.querySelectorAll(`#productFormFields [data-field-name="${field.name}"] .container-update-row`);
+                const updates = [];
+                rows.forEach(row => {
+                    const target = row.querySelector('.cu-target')?.value || 'leaf';
+                    const currentBarcode = (row.querySelector('.cu-current-bc')?.value || '').trim();
+                    const newContainerType = row.querySelector('.cu-new-type')?.value || '';
+                    const newBarcode = (row.querySelector('.cu-new-bc')?.value || '').trim();
+                    const rawQty = (row.querySelector('.cu-new-qty')?.value || '').trim();
+                    const newQuantity = rawQty !== '' ? (parseInt(rawQty, 10) || 0) : '';
+
+                    if (newContainerType || newBarcode || newQuantity !== '') {
+                        updates.push({ target, currentBarcode, newContainerType, newBarcode, newQuantity });
+                    }
+                });
+                data[field.name] = updates;
                 return;
             }
 
@@ -2127,18 +2737,61 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             }
         });
 
-        // Require Product Name for everything EXCEPT Manufacturers and Units
+        // Validation rules per action type
+        if (actionType === 'update-form-factor') {
+            const hasContainerBarcodeLookup = Array.isArray(data.containerUpdates) && data.containerUpdates.some(cu => cu.currentBarcode);
+            if (!data.productCode && !data.lookupBarcode && !data.productName && !hasContainerBarcodeLookup) {
+                this.showStatus('Enter a Current Item Number, Container Barcode, or Product Name to locate the item.', 'error');
+                return null;
+            }
+
+            if (Array.isArray(data.containerUpdates)) {
+                const missingByBarcode = data.containerUpdates.find(cu => cu.target === 'by-barcode' && !cu.currentBarcode);
+                if (missingByBarcode) {
+                    this.showStatus('Enter the Current Barcode when targeting "Match by Current Barcode".', 'error');
+                    return null;
+                }
+            }
+
+            const hasItemUpdates = Array.isArray(data.updateItemFields) && data.updateItemFields.length > 0;
+            const hasContainerUpdates = Array.isArray(data.containerUpdates) && data.containerUpdates.length > 0;
+            if (!hasItemUpdates && !hasContainerUpdates) {
+                this.showStatus('Select at least one item field to update or add a container update.', 'error');
+                return null;
+            }
+
+            if (hasItemUpdates && data.updateItemFields.includes('newProductCode') && !data.newProductCode) {
+                this.showStatus('Enter the New Item Number.', 'error');
+                return null;
+            }
+            if (hasItemUpdates && data.updateItemFields.includes('itemName') && !data.itemName) {
+                this.showStatus('Enter the New Item Name.', 'error');
+                return null;
+            }
+            return data;
+        }
+
         if (actionType !== 'add-manufacturer' && actionType !== 'add-unit' && !data.productName) {
             this.showStatus('Display Name is required', 'error');
             return null;
         }
 
-        // Require Manufacturer Name specifically for the new module
+        if (actionType === 'create') {
+            if (!Array.isArray(data.useContexts) || data.useContexts.length === 0) {
+                this.showStatus('Select at least one Use Context (Additive or Feed Base).', 'error');
+                return null;
+            }
+            if (data.useContexts.includes('additive') && (!data.expirationPrepared || data.expirationPrepared <= 0)) {
+                this.showStatus('Enter Hours Until Expiry Once Prepared for Additive products.', 'error');
+                return null;
+            }
+        }
+
         if (actionType === 'add-manufacturer' && !data.manufacturerName) {
             this.showStatus('Manufacturer Name is required', 'error');
             return null;
         }
-        // Require Unit Name specifically for the Unit module
+
         if (actionType === 'add-unit' && !data.unitName) {
             this.showStatus('Unit Name is required', 'error');
             return null;
@@ -2147,6 +2800,17 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         if (actionType === 'update' && (!Array.isArray(data.updateFields) || data.updateFields.length === 0)) {
             this.showStatus('Select at least one field to update.', 'error');
             return null;
+        }
+
+        if (actionType === 'update' && data.updateFields.includes('useContexts')) {
+            if (!Array.isArray(data.useContexts) || data.useContexts.length === 0) {
+                this.showStatus('Select at least one Use Context (Additive or Feed Base).', 'error');
+                return null;
+            }
+            if (data.useContexts.includes('additive') && (!data.expirationPrepared || data.expirationPrepared <= 0)) {
+                this.showStatus('Enter Hours Until Expiry Once Prepared for Additive products.', 'error');
+                return null;
+            }
         }
 
         if (actionType === 'update' && data.updateFields.includes('productName') && !data.newProductName) {
@@ -2169,12 +2833,38 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         fieldDefs.forEach(field => {
             if (field.type === 'section') return;
 
+            if (field.type === 'use-contexts') {
+                const ucBox = document.querySelector('#productFormFields .use-contexts-box');
+                if (!ucBox) return;
+                const defaults = Array.isArray(field.value) ? field.value : ['feed-base'];
+                ucBox.querySelectorAll('.use-context-cb').forEach(cb => {
+                    cb.checked = defaults.includes(cb.value);
+                });
+                const stdRadio = ucBox.querySelector('.additive-method-radio[value="standard"]');
+                if (stdRadio) stdRadio.checked = true;
+                const stdLbl = ucBox.querySelector('.standard-unit-label');
+                if (stdLbl) stdLbl.textContent = 'Standard Units (mL)';
+                const addUnitSel = ucBox.querySelector('[data-field-name="additiveUnit"]');
+                const atomicInput = ucBox.querySelector('[data-field-name="atomicUnits"]');
+                const decInput = ucBox.querySelector('[data-field-name="decimalPlaces"]');
+                const expPrepInput = ucBox.querySelector('[data-field-name="expirationPrepared"]');
+                if (addUnitSel) addUnitSel.value = 'ml';
+                if (atomicInput) atomicInput.value = '1';
+                if (decInput) decInput.value = '0';
+                if (expPrepInput) expPrepInput.value = '48';
+                this.syncAdditiveCustomFields(ucBox);
+                this.syncAdditiveContextPanel(ucBox);
+                return;
+            }
+
             if (field.type === 'checkbox-group') {
                 const checkboxGroup = document.querySelector(`#productFormFields [data-field-name="${field.name}"]`);
                 if (!checkboxGroup) return;
                 const selectedValues = Array.isArray(field.value) ? field.value : [];
                 checkboxGroup.querySelectorAll('.field-checkbox').forEach(checkbox => {
-                    checkbox.checked = selectedValues.includes(checkbox.dataset.fieldValue);
+                    const checked = selectedValues.includes(checkbox.dataset.fieldValue);
+                    checkbox.checked = checked;
+                    checkbox.closest('.update-toggle-btn')?.classList.toggle('selected', checked);
                 });
                 return;
             }
@@ -2182,11 +2872,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             if (field.type === 'conditional-input') {
                 const el = document.querySelector(`#productFormFields [data-field-name="${field.name}"]`);
                 if (!el) return;
-                el.classList.add('hidden');
-                const input = el.querySelector('input, select');
-                if (input) {
-                    input.disabled = true;
-                }
+                el.remove();
                 return;
             }
 
@@ -2195,6 +2881,14 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
                 if (listContainer) {
                     listContainer.innerHTML = '';
                     this.addHierarchyRow(listContainer, true);
+                }
+                return;
+            }
+
+            if (field.type === 'container-updates') {
+                const listContainer = document.querySelector(`#productFormFields [data-field-name="${field.name}"] .container-updates-list`);
+                if (listContainer) {
+                    listContainer.innerHTML = '';
                 }
                 return;
             }
@@ -2212,7 +2906,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         const tbody = document.getElementById('productsTableBody');
         const generateBtn = document.getElementById('generateSeederBtn');
         const clearBtn = document.getElementById('clearAllBtn');
-        
+
         if (this.products.length === 0) {
             tbody.innerHTML = '<tr class="empty-state"><td colspan="4" style="text-align:center; padding:40px; color:#94a3b8;">No products in batch.</td></tr>';
             if (clearBtn) clearBtn.style.display = 'none';
@@ -2221,35 +2915,54 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             return;
         }
 
-        tbody.innerHTML = this.products.map((p, idx) => `
-            <tr>
-                <td><span class="product-action-badge ${p.action}">${p.action}</span></td>
-                <td><strong>${p.productName}</strong></td>
-                <td class="product-details-cell">
+        tbody.innerHTML = this.products.map((p, idx) => {
+            const title = p.productName || p.itemName || p.manufacturerName || p.unitName || (p.productCode ? `Item #${p.productCode}` : `Barcode ${p.lookupBarcode || ''}`);
+            let detailsHtml = '';
+
+            if (p.action === 'update-form-factor') {
+                const cuCount = Array.isArray(p.containerUpdates) ? p.containerUpdates.length : 0;
+                detailsHtml = `
                     ${p.productCode ? `Item #: ${p.productCode}<br>` : ''}
-                    ${p.productUse ? `Use: ${p.productUse}<br>` : ''}
+                    ${p.lookupBarcode ? `Lookup BC: ${p.lookupBarcode}<br>` : ''}
+                    ${p.updateItemFields && p.updateItemFields.length ? `Item Fields: ${p.updateItemFields.join(', ')}<br>` : ''}
+                    ${cuCount > 0 ? `Containers: ${cuCount} update(s)` : ''}
+                `;
+            } else {
+                const contexts = (p.action === 'create' || (p.updateFields && (p.updateFields.includes('useContexts') || p.updateFields.includes('productUse'))))
+                    ? formatUseContextsSummary(normalizeProductUseContexts(p))
+                    : '';
+                detailsHtml = `
+                    ${p.productCode ? `Item #: ${p.productCode}<br>` : ''}
+                    ${contexts ? `Use: ${contexts}<br>` : ''}
                     ${p.updateFields ? `Fields: ${p.updateFields.join(', ')}<br>` : ''}
                     ${p.measurementVolume ? `Vol: ${p.measurementVolume} ${p.measurementUnit || 'mL'}` : ''}
-                </td>
+                `;
+            }
+
+            return `
+            <tr>
+                <td><span class="product-action-badge ${p.action}">${p.action}</span></td>
+                <td><strong>${title}</strong></td>
+                <td class="product-details-cell">${detailsHtml}</td>
                 <td>
                     <div class="product-row-actions">
-                        <!-- Text Hyperlink Preview -->
                         <button class="preview-link-btn preview-product-btn" data-index="${idx}" title="View Details">Preview</button>
-                        <!-- Remove Button -->
                         <button class="action-icon-btn remove-product-btn" data-index="${idx}" title="Remove">×</button>
                     </div>
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
 
         if (clearBtn) clearBtn.style.display = 'inline-block';
         if (generateBtn) generateBtn.style.display = 'inline-flex';
         document.querySelector('.product-count').textContent = this.products.length;
     }
+
     refreshApiGrid() {
         const tbody = document.getElementById('apiResultsBody');
         const searchInput = (document.getElementById('apiSearchInput').value || '').toLowerCase().trim();
-        
+
         if (!apiService.cachedProducts || apiService.cachedProducts.length === 0) return;
 
         const filtered = apiService.cachedProducts.filter(p => {
@@ -2266,9 +2979,8 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
         tbody.innerHTML = filtered.map(p => {
             const isChecked = this.products.some(prod => prod.apiItemId === p.ItemID.toString()) ? 'checked' : '';
-            // Remove trademarks and trim extra spaces
             const cleanFamilyName = (p.FamilyName || 'Unnamed Product').replace(/[®™©]/g, '').trim();
-            
+
             return `
             <tr>
                 <td style="text-align: center;">
@@ -2344,10 +3056,9 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             document.getElementById('nextSeederNum').focus();
             return;
         }
-        
+
         this.seederNumber = currentNum;
 
-        // Store config for on-the-fly conversion
         this.lastSeederConfig = {
             seederNumber: this.seederNumber,
             quarter: this.buildInfo ? this.buildInfo.quarter : 'Q4',
@@ -2356,7 +3067,6 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             buildInfo: this.buildInfo
         };
 
-        // Reset tabs to default (PHP v7)
         const tabs = document.querySelectorAll('.output-tab');
         if (tabs.length > 0) {
             tabs.forEach(btn => {
@@ -2370,11 +3080,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         this.switchOutputFormat('php-v7');
         this.showOutput(true);
     }
+
     switchOutputFormat(format) {
         if (!this.lastSeederConfig) return;
-        
+
         try {
-            // 1. Generate the correct code
             if (format === 'sql-v6') {
                 this.generatedSeeder = window.SeederTemplates.SQL_V6(this.lastSeederConfig.products);
             } else if (format === 'sql-v7') {
@@ -2385,21 +3095,16 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             }
             document.getElementById('seederPreview').textContent = this.generatedSeeder;
 
-            // 2. Toggle Auto-Write Availability
             const autoWriteWrapper = document.getElementById('autoWriteWrapper');
             const outputAutoWrite = document.getElementById('outputAutoWrite');
             const outputDownload = document.getElementById('outputDownload');
-            
+
             if (format.startsWith('sql')) {
-                // Hide Auto-Write for SQL tabs
                 if (autoWriteWrapper) autoWriteWrapper.style.display = 'none';
-                
-                // If Auto-Write was checked, forcefully switch them back to Download
                 if (outputAutoWrite && outputAutoWrite.checked && outputDownload) {
                     outputDownload.checked = true;
                 }
             } else {
-                // Restore Auto-Write for Laravel Seeder (ONLY if a folder is successfully linked)
                 if (this.seedersDirHandle && autoWriteWrapper) {
                     autoWriteWrapper.style.display = 'flex';
                 }
@@ -2409,11 +3114,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
             this.showStatus(`Conversion error: ${error.message}`, 'error');
         }
     }
+
     showOutput(show) {
         if (show) {
-            this.goToStep(3); // Updated to point to step-3 panel
-            
-            // Show Auto-Write if folder is successfully linked
+            this.goToStep(3);
+
             if (this.seedersDirHandle) {
                 document.getElementById('autoWriteWrapper').style.display = 'flex';
                 document.getElementById('outputAutoWrite').checked = true;
@@ -2428,12 +3133,11 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
     async executeOutput() {
         const method = document.querySelector('input[name="output"]:checked').value;
-        
-        // Determine file extension based on active tab
+
         const activeTab = document.querySelector('.output-tab.btn-primary');
         const format = activeTab ? activeTab.dataset.format : 'php-v7';
         const extension = format.startsWith('sql') ? 'sql' : 'php';
-        
+
         const fileName = `DATA${this.seederNumber}.${extension}`;
 
         if (method === 'download') {
@@ -2448,15 +3152,12 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
     async autoWriteSeeder(fileName) {
         try {
             this.showStatus('Writing file...', 'info');
-            
-            // This safely writes the file to the drive
             await fsAccessManager.writeSeederFile(this.seedersDirHandle, fileName, this.generatedSeeder);
-            
-            // Automatically advance the counter for the next product!
+
             this.seederNumber++;
             this.updateSeederNumberDisplay(this.seederNumber, 'auto-detected');
             this.saveProgress();
-            
+
             this.showSuccessModal('Seeder Written!', `${fileName} was written directly to the seeders folder.`);
         } catch (error) {
             console.error(error);
@@ -2472,7 +3173,7 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
         link.download = fileName;
         link.click();
         URL.revokeObjectURL(url);
-        
+
         this.seederNumber++;
         this.updateSeederNumberDisplay(this.seederNumber, this.seedersDirHandle ? 'verified' : 'saved');
         this.saveProgress();
@@ -2578,15 +3279,14 @@ async ensureSeedersFolder(forcePicker = false, runId = this.buildDetectionRun) {
 
     showStatus(msg, type = 'info') {
         const el = document.getElementById('statusMessage');
-        
-        // Add visual icons based on success or failure!
+
         let icon = 'ℹ️';
         if (type === 'success') icon = '✅';
         if (type === 'error') icon = '❌';
 
         el.innerHTML = `<span style="font-size: 16px;">${icon}</span> <span>${msg}</span>`;
         el.className = `status-message ${type}`;
-        
+
         el.classList.remove('hidden');
         setTimeout(() => el.classList.add('hidden'), 3500);
     }

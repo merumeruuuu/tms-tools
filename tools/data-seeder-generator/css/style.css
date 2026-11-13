@@ -123,7 +123,7 @@ body {
 
 .panel-layout {
     display: grid;
-    grid-template-columns: 520px 1fr; /* Widened from 450px so the side-by-side has room */
+    grid-template-columns: 520px 1fr;
     gap: 20px;
     flex: 1;
     overflow: hidden;
@@ -157,7 +157,7 @@ body {
 
 .panel-body {
     padding: 20px;
-    overflow-y: auto; /* Independent scrolling */
+    overflow-y: auto;
     flex: 1;
 }
 
@@ -206,6 +206,203 @@ body {
 }
 .product-form-group { margin-bottom: 15px; }
 .product-form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; }
+
+/* Use Contexts & TMS Additive Context Information Table */
+.use-contexts-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.use-context-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+.use-context-option {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #0f172a !important;
+    text-transform: none !important;
+    cursor: pointer;
+    user-select: none;
+}
+
+.use-context-option input[type="checkbox"] {
+    width: 15px !important;
+    height: 15px !important;
+    min-height: 15px !important;
+    margin: 0 !important;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.additive-context-panel {
+    background: #ffffff;
+    border: 1px solid #bae6fd;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.additive-context-panel.hidden {
+    display: none;
+}
+
+.additive-context-header {
+    background: #cffafe;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-bottom: 1px solid #a5f3fc;
+}
+
+.additive-context-rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.additive-context-row {
+    display: grid;
+    grid-template-columns: 165px minmax(0, 1fr);
+    border-bottom: 1px solid #e2e8f0;
+    align-items: center;
+}
+
+.additive-context-row:last-child {
+    border-bottom: none;
+}
+
+.additive-row-label {
+    padding: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    text-align: right;
+    border-right: 1px solid #e2e8f0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    background: #f8fafc;
+}
+
+.additive-row-control {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.additive-radio-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.additive-radio-option {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 0 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    text-transform: none !important;
+    cursor: pointer;
+}
+
+.additive-radio-option input[type="radio"] {
+    width: 16px !important;
+    height: 16px !important;
+    min-height: 16px !important;
+    margin: 0 !important;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.additive-custom-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px dashed #cbd5e1;
+}
+
+.additive-custom-fields.hidden {
+    display: none;
+}
+
+.additive-custom-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0 !important;
+}
+
+.additive-custom-field span {
+    font-size: 10px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+}
+
+.additive-custom-field input,
+.additive-custom-field select {
+    min-height: 32px !important;
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+    background: #ffffff;
+}
+
+.additive-expiry-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.additive-expiry-input-wrap {
+    position: relative;
+    width: 82px;
+    flex-shrink: 0;
+}
+
+.additive-expiry-input-wrap input {
+    min-height: 32px !important;
+    padding: 5px 18px 5px 8px !important;
+    font-size: 12px !important;
+    text-align: center;
+}
+
+.additive-req-star {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 13px;
+    pointer-events: none;
+}
+
+.additive-expiry-hint {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 150px;
+}
 
 .update-field-layout {
     display: flex;
@@ -316,10 +513,14 @@ body {
 .products-preview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .products-preview-table th { background: #f8fafc; padding: 12px; text-align: left; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid var(--border); position: sticky; top: 0; }
 .products-preview-table td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.product-action-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.product-action-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; display: inline-block; }
 .product-action-badge.create { background: #dcfce7; color: #166534; }
 .product-action-badge.update { background: #fef9c3; color: #9a3412; }
+.product-action-badge.update-form-factor { background: #e0f2fe; color: #075985; }
+.product-action-badge.add-form-factor { background: #dbeafe; color: #1e40af; }
 .product-action-badge.barcode-update { background: #f3e5f5; color: #6a1b9a; }
+.product-action-badge.add-manufacturer { background: #f1f5f9; color: #334155; }
+.product-action-badge.add-unit { background: #ccfbf1; color: #115e59; }
 
 /* Seeder Number Input */
 .seeder-num-control { display: flex; align-items: center; gap: 6px; }
@@ -377,6 +578,7 @@ body {
 .form-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 .form-tab-content { display: none; }
 .form-tab-content.active { display: block; }
+
 /* Upload Areas (Doc & CSV) */
 .csv-upload-area {
     border: 2px dashed #94a3b8;
@@ -400,12 +602,15 @@ body {
     font-size: 36px;
     margin-bottom: 10px;
 }
+
 /* Table Action Buttons */
 .product-row-actions {
     display: flex;
-    gap: 12px;
+    gap: 15px;
     align-items: center;
     justify-content: flex-end;
+    white-space: nowrap;
+    min-width: 100px;
 }
 
 .action-icon-btn {
@@ -434,9 +639,9 @@ body {
 
 .preview-grid:nth-child(even) { background-color: #f8fafc; border-radius: 6px; }
 
-.preview-label { font-weight: 600; color: var(--text-muted); font-size: 12px; text-transform: uppercase;}
+.preview-label { font-weight: 600; color: var(--text-muted); font-size: 12px; text-transform: uppercase; }
 .preview-value { color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
-/* Hyperlink style for Preview button */
+
 .preview-link-btn {
     background: none;
     border: none;
@@ -453,25 +658,18 @@ body {
     text-decoration: underline;
     color: var(--primary-hover);
 }
-/* Table Action Buttons */
-.product-row-actions {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    justify-content: flex-end;
-    white-space: nowrap; /* Prevents "Preview" from wrapping or squishing */
-    min-width: 100px;    /* Forces the column to respect the button sizes */
-}
+
 .csv-upload-area.drag-active {
     border-color: var(--primary);
     background: #eff6ff;
     transform: scale(1.02);
 }
+
 /* Editable Preview Inputs */
 .preview-input {
     width: 100%;
     padding: 4px 8px;
-    margin: -4px -8px; /* Offset padding to align with label */
+    margin: -4px -8px;
     border: 1px solid transparent;
     border-radius: 4px;
     font-family: inherit;
@@ -694,7 +892,8 @@ select.preview-input {
 
 .tmnp-remove-control { align-self: center; }
 
-.tmnp-hierarchy-row .remove-preview-ff-btn {
+.tmnp-hierarchy-row .remove-preview-ff-btn,
+.tmnp-container-update-row .remove-preview-cu-btn {
     border: 0;
     background: transparent;
     color: #d84747;
@@ -721,6 +920,18 @@ select.preview-input {
 
 .tmnp-add-container-btn:hover { border-color: #2874c8; color: #215fa4; }
 
+/* Container Update Rows (Preview Modal) */
+.tmnp-container-update-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1.15fr) minmax(115px, 1.2fr) minmax(105px, 1fr) minmax(115px, 1.2fr) minmax(65px, 0.7fr) 24px;
+    align-items: end;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 9px;
+    border-left: 4px solid #2874c8;
+    background: #edf2f7;
+}
+
 #closePreviewBtn {
     flex-shrink: 0;
     width: 100%;
@@ -738,6 +949,21 @@ select.preview-input {
     }
     .tmnp-volume-field { grid-column: 2 / 4; }
     .tmnp-remove-control { grid-column: 4; grid-row: 1; }
+    .tmnp-container-update-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .additive-context-row {
+        grid-template-columns: 1fr;
+    }
+    .additive-row-label {
+        justify-content: flex-start;
+        text-align: left;
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .additive-custom-fields {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Update Module Ultra-Compact Inline Layout */
@@ -812,12 +1038,17 @@ select.preview-input {
     margin-bottom: 0;
 }
 
-.update-editor-panel .conditional-field input,
+.update-editor-panel .conditional-field[data-field-name="useContexts"] {
+    grid-column: 1 / -1;
+}
+
+.update-editor-panel .conditional-field input:not([type="checkbox"]):not([type="radio"]),
 .update-editor-panel .conditional-field select {
     display: block !important;
     width: 100% !important;
     box-sizing: border-box !important;
 }
+
 .update-button-group {
     display: flex;
     flex-wrap: wrap;
@@ -940,7 +1171,7 @@ select.preview-input {
 }
 
 #step-2 .input-field,
-#step-2 .product-form-group input,
+#step-2 .product-form-group input:not([type="checkbox"]):not([type="radio"]),
 #step-2 .product-form-group select {
     min-height: 40px;
     border-color: #cbd5e1;
@@ -983,6 +1214,27 @@ select.preview-input {
     margin-left: 28px;
     border-left-color: #aebdcb;
     background: #f5f7fa;
+}
+
+/* Container Update Row inside Step 2 Manual Form */
+#step-2 .container-update-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 28px;
+    gap: 8px;
+    padding: 10px;
+    border-left: 4px solid #2874c8;
+    border-radius: 6px;
+    background: #f1f5f9;
+    align-items: end;
+}
+
+#step-2 .container-update-row .cu-span-2 {
+    grid-column: 1 / 3;
+}
+
+#step-2 .container-update-row .manual-hierarchy-remove {
+    grid-column: 3;
+    grid-row: 1;
 }
 
 #step-2 .manual-hierarchy-field {
@@ -1073,7 +1325,6 @@ select.preview-input {
     #step-2 .panel-layout {
         grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.2fr);
     }
-
 }
 
 @media (max-width: 760px) {
@@ -1131,12 +1382,13 @@ select.preview-input {
         padding: 16px 0 4px;
     }
 }
+
 /* --- Professional Steps Indicator --- */
 .steps-indicator {
     display: flex;
     justify-content: space-between;
     position: relative;
-    max-width: 650px; /* Widened to utilize more horizontal space */
+    max-width: 650px;
     width: 100%;
     margin: 0 auto 25px auto;
     flex-shrink: 0;
@@ -1145,7 +1397,7 @@ select.preview-input {
 .steps-indicator::before {
     content: ''; 
     position: absolute; 
-    top: 14px; /* Adjusted to align with smaller circles */
+    top: 14px;
     left: 15%; 
     right: 15%; 
     height: 2px; 
@@ -1163,8 +1415,8 @@ select.preview-input {
 }
 
 .step-number {
-    width: 28px; /* Shrunk from 36px */
-    height: 28px; /* Shrunk from 36px */
+    width: 28px;
+    height: 28px;
     border-radius: 50%; 
     background: white; 
     border: 2px solid var(--border);
@@ -1195,9 +1447,9 @@ select.preview-input {
     font-size: 11px; 
     font-weight: 600; 
     color: var(--text-muted);
-    text-transform: uppercase; /* Adds a clean, professional aesthetic */
+    text-transform: uppercase;
     letter-spacing: 0.5px;
-    white-space: nowrap; /* Forces text onto one line (fixes the squished text) */
+    white-space: nowrap;
 }
 
 .step.active .step-label { 

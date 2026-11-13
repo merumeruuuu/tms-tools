@@ -10,7 +10,8 @@ const DB_SCHEMA = {
         HISTORY: 'nutrition_product_types_history',
         MANUFACTURERS: 'nutrition_product_types_manufacturer',
         APPLICABLE_FF: 'nutrition_product_types__applicable_form_factor_types',
-        ADDITIVE_CONTEXT: 'nutrition_product_types__additive_context_units'
+        ADDITIVE_CONTEXT: 'nutrition_product_types__additive_context_units',
+        USE_CONTEXTS: 'nutrition_product_types__use_contexts'
     },
     COLUMNS: {
         // Products

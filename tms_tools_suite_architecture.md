@@ -78,25 +78,29 @@ Because Vue runtime template compilation, Monaco Editor workers, and legacy rend
 
 ### 3.2 Data Seeder Generator (`tools/data-seeder-generator/`)
 
-#### Execution & Shared Utilities (`index.html`)
-Runs directly in `extension_pages` context, loading vanilla JS singletons sequentially via `<script>` tags (`mammoth.browser.min.js`, `wamp-detector.js`, `seeder-generator.js`, `csv-handler.js`, `fs-access.js`, `idb-keyval.js`, `app.js`, `constants.js`, `templates/q3-template.js`, `api-service.js`, `templates/v6-sql-template.js`, `templates/v7-sql-template.js`).
+#### Execution & Shared Utilities (`index.html`, `css/style.css`)
+Runs directly in `extension_pages` context, loading vanilla JS singletons sequentially via `<script>` tags:
+`js/mammoth.browser.min.js` → `js/wamp-detector.js` → `js/seeder-generator.js` → `js/csv-handler.js` → `js/fs-access.js` → `js/idb-keyval.js` → `js/app.js` → `js/constants.js` → `js/templates/q3-template.js` → `js/api-service.js` → `js/templates/v6-sql-template.js` → `js/templates/v7-sql-template.js`.
 
 #### 3-Step Wizard (`js/app.js` → `DataSeederApp`)
 1. **Step 1 — Target Build Detection (`wamp-detector.js`, `fs-access.js`):**
-   * `wampDetector.parseUrl()` parses `.local` hostnames (e.g., `chla7-v7-3-5.local`) into `{ clientName, version, quarter, hostname, buildFolderName }`, mapping `v7-23`/`q1`/`v22` → `Q1`, `v7-2` → `Q2`, `v7-3` → `Q3`, and `v7-4` → `Q4`.
-   * `fsAccessManager` persists `FileSystemDirectoryHandle` / `FileSystemFileHandle` entries in IndexedDB (`seeder-fs-handles`), resolves Apache `<VirtualHost>` `.conf` files and Windows `hosts` entries, locates `vendor/timeless/customers/src/Database/Seeds/ClientDataUpdates`, and scans existing `DATA(\d+)\.php` files (`getHighestSeederNumber`) to compute the next seeder number.
-2. **Step 2 — Batch Input (4 Modes):**
-   * **Manual Entry:** Supports 6 actions (`create`, `add-form-factor`, `update` with conditional field toggles from `UPDATE_FIELD_DEFINITIONS`, `barcode-update`, `add-manufacturer`, `add-unit`) plus a dynamic container packaging hierarchy builder (outermost container at top in UI, reversed to innermost-first in `product.hierarchy`).
+   * `wampDetector.parseUrl()` parses `.local` hostnames (e.g., `chla7-v7-3-5.local`, `edward-v7-23-q1-2-9.local`) into `{ clientName, version, quarter, hostname, buildFolderName }`, mapping `v7-23`/`q1`/`v22` → `Q1`, `v7-2` → `Q2`, `v7-3` → `Q3`, and `v7-4` → `Q4`.
+   * `fsAccessManager` resolves project folders in order: remembered shared parent roots (`build-parent-roots`), master WAMP root (`wamp-root`), Windows `hosts` IP lookup (`windows-hosts-file`), Apache `<VirtualHost>` `.conf` parsing (`apache-vhost-root` with `ServerName`/`ServerAlias` and `VirtualDocumentRoot`/`DocumentRoot` token expansion), and per-build handles (`build:<host>|<root>`).
+   * Locates `vendor/timeless/customers/src/Database/Seeds/ClientDataUpdates` and scans `DATA(\d+)\.php` files (`getHighestSeederNumber`) to compute `nextSeederNum`.
+2. **Step 2 — Batch Input (4 Modes) & Editable Preview Modal (`previewProduct`):**
+   * **Manual Entry:** Supports 6 actions (`create`, `add-form-factor`, `update` with conditional field toggles from `UPDATE_FIELD_DEFINITIONS`, `barcode-update`, `add-manufacturer`, `add-unit`) plus a dynamic container packaging hierarchy builder (`addHierarchyRow`: outermost container at top in UI, reversed to innermost-first in `product.hierarchy`).
    * **Products From TMNS (`api-service.js`):** Authenticates with Bearer token (`localStorage['tms_api_config']`), fetches facilities (`GET /api/internal/cpoe/v1/get-facilities`), paginates product catalogs (`GET /api/internal/cpoe/v1/get-product-by-facility/{facilityId}/{offset}/1`) into IndexedDB (`cachedApiProducts`), and fetches nutrient/item details when rows are checked (`GET /api/internal/cpoe/v1/get-product-by-itemid/{facilityId}/{itemIds}`).
-   * **Doc Import:** Extracts `.docx` request forms offline via `mammoth.extractRawText()` and regex boundary splitting (`processExtractedDocText`).
-   * **CSV Import (`csv-handler.js`):** Parses quoted/multiline CSVs matching CHKD Product List headers and converts multiline `Form Factors` columns into `hierarchy` arrays.
-3. **Step 3 — Code Preview & Export:**
+   * **Doc Import (`handleDocUpload`, `processExtractedDocText`):** Extracts single or multiple `.docx`/`.txt` request forms offline via `mammoth.extractRawText()`, splits known form labels via regex boundaries, filters raw HL7 strings from reference codes, and parses container hierarchy columns in reverse (innermost-first).
+   * **CSV Import (`csv-handler.js` → `CsvHandler`):** Parses quoted/multiline CSVs matching the 25-column CHKD Product List schema (`Action`, `Item Name`, `ShortName`, `HL7 Reference`, `Manufacturer Description`, `Type`, `Category`, `Measurement Unit`, `Form Factors`, etc.), converts multiline `Form Factors` (`Case[] (48)\n59mL Bottle[] (1)`) into `hierarchy` arrays, and auto-detects `updateFields` when `Action = update`.
+   * **Batch Preview & Edit Modal (`previewProduct`, `savePreviewChanges`):** Allows inline editing of staged product properties and adding/removing container hierarchy levels before code generation.
+3. **Step 3 — Code Preview & Export (`seeder-generator.js`, `js/templates/*`):**
    * Switches live between `php-v7` (`SeederTemplates.Q3`), `sql-v7` (`SeederTemplates.SQL_V7`), and `sql-v6` (`SeederTemplates.SQL_V6`).
-   * Exports via **Auto-Write** (`fsAccessManager.writeSeederFile`, available on `php-v7` when a directory handle is linked), **Download** (`.php`/`.sql` Blob), or **Copy Code**, incrementing `seederNumber` after each export.
+   * Exports via **Auto-Write** (`fsAccessManager.writeSeederFile`, enabled only for `php-v7` when `seedersDirHandle` is linked), **Download** (`DATA{n}.php` or `DATA{n}.sql`), or **Copy Code**, incrementing `seederNumber` after each export.
 
-#### Schema & Template Engine (`constants.js`, `templates/q3-template.js`)
-* `DB_SCHEMA` centralizes table and column names (`nutrition_product_types`, `nutrition_product_type_items`, `nutrition_product_type_form_factors`, `nutrition_product_types_history` with action codes `9000` create / `9001` update, `nutrition_product_types_manufacturer`, `nutrition_product_types__applicable_form_factor_types`, `nutrition_product_types__additive_context_units`, and `units`).
-* `SeederTemplates.Q3` wraps all blocks in `DB::beginTransaction()` with `SET FOREIGN_KEY_CHECKS=0/1`, constructs parent-child `NutritionProductTypeFormFactor` chains, and logs completion to `AutomatedUpdates`.
+#### Schema & Template Engine (`constants.js`, `templates/q3-template.js`, `v6-sql-template.js`, `v7-sql-template.js`)
+* `DB_SCHEMA` centralizes v7 table and column names (`nutrition_product_types`, `nutrition_product_type_items`, `nutrition_product_type_form_factors`, `nutrition_product_types_history` with action codes `9000` create / `9001` update, `nutrition_product_types_manufacturer`, `nutrition_product_types__applicable_form_factor_types`, `nutrition_product_types__additive_context_units`, and `units`).
+* `SeederTemplates.Q3` generates Laravel Eloquent seeders wrapped in `DB::beginTransaction()` with `SET FOREIGN_KEY_CHECKS=0/1`, constructs parent-child `NutritionProductTypeFormFactor` chains from outermost to innermost, and logs execution to `AutomatedUpdates`.
+* `SeederTemplates.SQL_V6` targets legacy v6 schemas (`fortification_types`, `nutrition_product_type_form_factor_containment_relations`), while `SeederTemplates.SQL_V7` emits standalone MySQL `SET @prod{i}ID` scripts.
 
 ---
 
@@ -112,15 +116,17 @@ Runs directly in `extension_pages` context, loading vanilla JS singletons sequen
 
 ### 3.4 PHI Scrubber (`tools/phi-scrubber/`)
 
-* **Primary Dashboard App (`app.html`, `app.js`):**
-  * Runs in `extension_pages` and persists custom replacement values (`savedPrefix`, `savedFirst`, `savedMiddle`, `savedLast`, `savedNickname`, `savedId`, `savedPhone`, `savedEmail`, `savedAddress`, `savedDate`) in `chrome.storage.local`.
-  * **Paste Auto-Formatter (`autoFormatData`):** Intercepts `paste` events on `raw-editor` to restore newlines on flattened or OCR-corrupted HL7 messages (`MSH`, `EVN`, `PID`, `PD1`, `NK1`, `PV1`, `PV2`, `OBX`, `ORC`, `OBR`, `IN1`, `IN2`, `GT1`, `AL1`, `DG1`, `PR1`, `MRG`, `RXO`, `RXE`, `SCH`, `REF`, `NTE`, `ODS`, `Z`, plus `MSH|^~\&` header repair) and ZPL commands (`^XA`, `^FO`, `^A0`, `^FD`, `^FS`, `^XZ`).
+* **Primary Dashboard App (`app.html`, `app.css`, `app.js`, `mirth.min.js`):**
+  * Runs in `extension_pages` and persists **Segment Overrides** (`savedSegmentRules`) alongside **Default Replacement Data** (`savedPrefix`, `savedFirst`, `savedMiddle`, `savedLast`, `savedNickname`, `savedPhone`, `savedEmail`, `savedAddress`, `savedDate`) in `chrome.storage.local`. Unoverridden IDs default automatically to `[RANDOM]` character-class masking (`randomizeString`).
+  * **Segment Override Builder (`segmentFieldPresets`, `buildCanonicalDescriptor`, `parseTmsFieldDescriptor`):** Lets users pick any HL7 segment (`PID`, `ORC`, `PV1`, `OBR`, `NK1`, `GT1`, `IN1`, `MSH`, `RXE`, `SPM`, or custom `Z*` segments) and field/component path (`<SEG>[<segIdx>]-<field>[<rep>].<comp>[<subcomp>]`), automatically resolving and prioritizing exact path overrides over default segment rules.
+  * **Paste Auto-Formatter (`autoFormatData`):** Intercepts `paste` events on `raw-editor` to restore newlines on flattened or OCR-corrupted HL7 batch/message streams (`FHS`, `BHS`, `MSH`, `EVN`, `PID`, `PD1`, `NK1`, `PV1`, `PV2`, `OBX`, `ORC`, `OBR`, `IN1`, `IN2`, `GT1`, `AL1`, `DG1`, `PR1`, `MRG`, `RXO`, `RXE`, `SCH`, `REF`, `NTE`, `ODS`, `SPM`, `SAC`, `TQ1`, `TQ2`, `ROL`, `AIP`, `AIL`, `AIS`, `ARQ`, `BTS`, `FTS`, `Z*`, plus `MSH|^~\&` repair) and ZPL commands (`^XA`, `^PON`, `^CI0`/`^CI28`, `^PW`, `^LL`, `^LH`, `^PQ`, `^BY`, `^FO`, `^FT`, `^A0`, `^FD`, `^FS`, `^XZ`).
   * **Dual-Mode PHI Engine (`runCoreEngine(text, mode)`):**
     * `diff` mode: Three-pane synchronized IDE (`raw-editor` with `<mark class="phi-red">`, center `action-editor` gutter with per-line undo `↺` / redo `↻` backed by `originalLinesStore` / `modifiedLeftStore` / `modifiedRightStore`, and `clean-editor` with `<mark class="phi-green">`).
     * `scan` mode: Audits text in place without replacement (`<mark class="phi-yellow">`) and reports safe/unsafe match counts.
-    * Uses structured HL7 field-index mapping (`hl7Map` across `PID`, `NK1`, `PV1`, `PV2`, `ORC`, `OBR`, `OBX`, `IN1`, `IN2`, `GT1`, `MRG`, `PR1`, `DG1`, `PD1` with `IGNORE` rules for `MSH`/`EVN`), regex fallbacks (`fallbackPatterns` for test keywords, SSN, phone, email, dates excluding `Expires:`/`Exp:`, addresses, HL7 `Last^First` tokens, quoted/comma names), and whitelist checks (`isTextSafe`, `blacklist`, `nameIgnore`).
-  * **HL7 Tree Inspector (`hl7Dictionary`):** Parses HL7 lines from `raw-editor` into an expandable segment-and-field tree (`MSH-1`, `PID-5`, etc.).
-* **Popup Utility (`popup.html`, `popup.js`):** Lightweight popup supporting regex text redaction and `.txt`/`.csv`/`.json` file scrubbing exported via `chrome.downloads.download({ saveAs: true })`.
+    * **TMS HL7 Alignment (`HL7.php` / `MSH.php` conventions):** Dynamically extracts `MSH`/`FHS`/`BHS` encoding characters (`extractHl7Delimiters`), splits only on unescaped delimiters (`splitUnescaped`), preserves HL7 explicit null tokens (`""`), resolves 1-based `MSH` field offsets (`MSH-1` through `MSH-21`), and iterates repeating fields (`~`), components (`^`), and subcomponents (`&`) across `XPN` (`NAME`), `XCN` (`PROVIDER`), `CX` (`ID`), `XAD` (`ADDRESS`), `XTN` (`PHONE`), and `TS`/`DTM` (`DATE` with timestamp precision preservation via `formatDummyDate`).
+    * **Parameter & Fallback Parsing (`processRegexTokens`):** Redacts structured key-value pairs (`parameterPairRegex` for JSON, PHP arrays, query strings, and label `Key: Value` pairs) and TMS field-descriptor logs (`hl7DescriptorPairRegex`), protects ZPL/EPL barcode payloads (`^BX`, `^BC`, `^BQ`, `^B0`, `^B3`, `^BU`), and applies case-insensitive TMS/milk-bank domain whitelists (`isTextSafe`, `domainBlacklistSet`, `isBlacklistedPhrase`, `nameIgnore`).
+  * **Hierarchical HL7 Tree Inspector (`hl7Dictionary`):** Validates HL7 input via `mirth.min.js` (`HL7`), tracks segment occurrences (`PID[2]`), tags PHI-bearing fields (`ID`, `NAME`, `PROVIDER`, `DATE`, `PHONE`, `ADDRESS`, `SSN`, `TEXT`), and expands nested repetitions, components, and subcomponents using TMS 1-based descriptors (`SEG[idx]-Field[rep].Comp[sub]`).
+* **Popup Utility (`popup.html`, `popup.js`):** Lightweight popup synced with `chrome.storage.local` defaults, supporting auto-formatted HL7 segment/repetition/component scrubbing, key-value parameter redaction, and `.txt`/`.csv`/`.json` file scrubbing exported via `chrome.downloads.download({ saveAs: true })`.
 
 ---
 
@@ -129,7 +135,7 @@ Runs directly in `extension_pages` context, loading vanilla JS singletons sequen
 | Storage Mechanism | Key(s) | Owner Module | Purpose |
 | :--- | :--- | :--- | :--- |
 | `chrome.storage.local` | `tms_products`, `tms_client_defaults`, `tms_calibrations`, `tms_qa_urls` | `label-simulator` (`index.js` ↔ `shield.js`) | Persists product barcode overrides, URL hardware defaults, calibration rules, and saved build URLs across sandbox reloads. |
-| `chrome.storage.local` | `savedPrefix`, `savedFirst`, `savedMiddle`, `savedLast`, `savedNickname`, `savedId`, `savedPhone`, `savedEmail`, `savedAddress`, `savedDate` | `phi-scrubber` (`app.js`) | Persists custom dummy replacement values. |
+| `chrome.storage.local` | `savedPrefix`, `savedFirst`, `savedMiddle`, `savedLast`, `savedNickname`, `savedPhone`, `savedEmail`, `savedAddress`, `savedDate`, `savedSegmentRules` *(plus legacy `savedId` read in `popup.js`)* | `phi-scrubber` (`app.js`, `popup.js`) | Persists default replacement values and segment-specific HL7 field override rules. |
 | `localStorage` | `seederFavorites`, `seederNumbers`, `tms_api_config` | `data-seeder-generator` (`app.js`, `wamp-detector.js`, `api-service.js`) | Stores saved WAMP builds, last-used `DATA{n}` numbers, and TMNS CPOE API credentials/facility selection. |
 | `sessionStorage` | `dataSeederWorkflow` | `data-seeder-generator` (`app.js`) | Auto-saves mid-wizard step, form inputs, hierarchy rows, and staged batch across page refreshes. |
 | `IndexedDB` (`seeder-fs-handles`) | `wamp-root`, `apache-vhost-root`, `windows-hosts-file`, `build-parent-roots`, `build:<host>\|<root>` | `data-seeder-generator` & `label-simulator` (`fs-access.js`) | Persists File System Access API directory/file handles across sessions. |
@@ -142,4 +148,4 @@ Runs directly in `extension_pages` context, loading vanilla JS singletons sequen
 1. **Zero External Network Calls for PHI:** Never introduce remote CDNs, external analytics, or cloud API calls. `phi-scrubber` and `label-simulator` must process all data 100% locally.
 2. **Respect Sandbox Isolation:** Never call `chrome.*` APIs inside `tools/label-simulator/sandbox.html` or its scripts; always route storage, CORS-bypassed fetches, and file system actions through `window.parent.postMessage` to `tools/label-simulator/index.js`.
 3. **MV3 CSP Compliance:** Keep all HTML files free of inline `<script>` blocks (except inside `sandbox.html` where allowed by sandbox CSP) and avoid introducing npm/Webpack/Vite build steps—preserve the vanilla ES6+ and global script conventions.
-4. **Cross-Tool Shared Files:** Changes to `tools/data-seeder-generator/js/wamp-detector.js` or `tools/data-seeder-generator/js/fs-access.js` directly affect `tools/label-simulator/index.js`—verify both tools whenever modifying those utilities.
+4. **Cross-Tool Shared Files:** Changes to `tools/data-seeder-generator/js/wamp-detector.js` or `tools/data-seeder-generator/js/fs-access.js` directly affect `tools/label-simulator/index.js` and `sandbox.html`—verify both tools whenever modifying those utilities.
