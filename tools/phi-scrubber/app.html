@@ -7,53 +7,112 @@
 </head>
 <body>
   <div class="sidebar">
-    <a class="back-button" href="../../dashboard/index.html">← Back to Dashboard</a>
+    <a class="back-button" href="../../dashboard/index.html">&larr; Back to Dashboard</a>
     <h2>PHI Scrubber</h2>
-    
+
+    <!-- 1. SEGMENT OVERRIDE BUILDER -->
     <div class="settings-panel">
-      <h3>Replacement Data</h3>
-      <p class="subtitle">Customize and save your dummy data here.</p>
-      
-      <label>Prefix:</label>
-      <input type="text" id="dummy-prefix" value="Dr.">
+      <h3>Segment Overrides</h3>
+      <p class="subtitle">Select a segment &amp; field to assign a specific replacement value.</p>
 
-      <label>First Name:</label>
-      <input type="text" id="dummy-first" value="John">
+      <div class="field-grid-2">
+        <div class="field-item">
+          <label for="override-segment">Segment</label>
+          <select id="override-segment">
+            <option value="PID" selected>PID &mdash; Patient ID</option>
+            <option value="ORC">ORC &mdash; Common Order</option>
+            <option value="PV1">PV1 &mdash; Patient Visit</option>
+            <option value="OBR">OBR &mdash; Observation Req</option>
+            <option value="NK1">NK1 &mdash; Next of Kin</option>
+            <option value="GT1">GT1 &mdash; Guarantor</option>
+            <option value="IN1">IN1 &mdash; Insurance</option>
+            <option value="MSH">MSH &mdash; Message Header</option>
+            <option value="RXE">RXE &mdash; Pharmacy Order</option>
+            <option value="SPM">SPM &mdash; Specimen</option>
+            <option value="CUSTOM">Custom (Z* Segment)...</option>
+          </select>
+        </div>
 
-      <label>Middle Name/Initial:</label>
-      <input type="text" id="dummy-middle" value="A">
+        <div class="field-item">
+          <label for="override-field">Field</label>
+          <input type="text" id="override-field" list="field-options" placeholder="e.g. 3.1 (MRN)">
+          <datalist id="field-options"></datalist>
+        </div>
+      </div>
 
-      <label>Last Name:</label>
-      <input type="text" id="dummy-last" value="Doe">
+      <div id="custom-segment-row" class="field-item hidden">
+        <label for="override-custom-segment">Custom Segment Code</label>
+        <input type="text" id="override-custom-segment" maxlength="6" placeholder="e.g. ZPI or Z01">
+      </div>
 
-      <label>Nickname:</label>
-      <input type="text" id="dummy-nickname" value="Johnny">
-      
-      <label>SSN/ID/MRN:</label>
-      <input type="text" id="dummy-id" value="[RANDOM]">
-      
-      <label>Mobile/Phone:</label>
-      <input type="text" id="dummy-phone" value="555-0199">
+      <div class="override-add-row">
+        <input type="text" id="override-value" placeholder="Value (e.g. 11111 or [RANDOM])">
+        <button type="button" id="btn-add-override" class="add-override-btn">+ Add</button>
+      </div>
 
-      <label>Email:</label>
-      <input type="text" id="dummy-email" value="test@email.com">
+      <div id="override-list" class="override-list"></div>
+    </div>
 
-      <label>Address:</label>
-      <input type="text" id="dummy-address" value="123 Fake St, City, ST">
+    <!-- 2. COMPACT DEFAULT REPLACEMENT DATA -->
+    <div class="settings-panel">
+      <h3>Default Replacement Data</h3>
+      <p class="subtitle">Fallback values used when no segment override is set.</p>
 
-      <label>Date:</label>
-      <input type="text" id="dummy-date" value="01/01/2000">
-      
-      <button id="btn-save-settings" class="secondary-btn">Save Preferences</button>
+      <div class="field-grid-2">
+        <div class="field-item">
+          <label for="dummy-prefix">Prefix</label>
+          <input type="text" id="dummy-prefix" value="Dr.">
+        </div>
+        <div class="field-item">
+          <label for="dummy-nickname">Nickname</label>
+          <input type="text" id="dummy-nickname" value="Johnny">
+        </div>
+      </div>
+
+      <div class="field-grid-3">
+        <div class="field-item">
+          <label for="dummy-first">First</label>
+          <input type="text" id="dummy-first" value="John">
+        </div>
+        <div class="field-item">
+          <label for="dummy-middle">Mid</label>
+          <input type="text" id="dummy-middle" value="A">
+        </div>
+        <div class="field-item">
+          <label for="dummy-last">Last</label>
+          <input type="text" id="dummy-last" value="Doe">
+        </div>
+      </div>
+
+      <div class="field-grid-2">
+        <div class="field-item">
+          <label for="dummy-phone">Mobile / Phone</label>
+          <input type="text" id="dummy-phone" value="555-0199">
+        </div>
+        <div class="field-item">
+          <label for="dummy-email">Email</label>
+          <input type="text" id="dummy-email" value="test@email.com">
+        </div>
+      </div>
+
+      <div class="field-item">
+        <label for="dummy-date">Date</label>
+        <input type="text" id="dummy-date" value="01/01/2000">
+      </div>
+
+      <div class="field-item">
+        <label for="dummy-address">Address</label>
+        <input type="text" id="dummy-address" value="123 Fake St, City, ST">
+      </div>
+
+      <button type="button" id="btn-save-settings" class="secondary-btn">Save Preferences</button>
       <div id="save-status"></div>
     </div>
   </div>
 
   <div class="main-content">
-    
     <div class="tabs">
       <button id="tab-text" class="active">IDE Text / Paste Image</button>
-      <!-- <button id="tab-file"></button> -->
       <button id="tab-inspector">HL7 Tree Inspector</button>
     </div>
 
@@ -65,11 +124,11 @@
         <button id="btn-clear">Clear Editors</button>
       </div>
       <div id="text-status" class="status-msg"></div>
-      
+
       <div class="ide-container">
         <div class="ide-pane">
           <div class="ide-header">RAW INPUT (RED)</div>
-          <div id="raw-editor" class="code-editor" contenteditable="true" spellcheck="false" placeholder="Paste text, logs, or image here..."></div>
+          <div id="raw-editor" class="code-editor" contenteditable="true" spellcheck="false" placeholder="Paste HL7, ZPL/EPL, JSON, PHP arrays, or logs here..."></div>
         </div>
         <div class="ide-center-gutter">
           <div class="ide-header text-transparent">.</div>
@@ -82,31 +141,19 @@
       </div>
     </div>
 
-    <!-- <div id="view-file" class="view hidden">
-      <div class="file-container">
-        <h3>Bulk File & Image Scrubbing</h3>
-        <p>Select a .txt, .csv, .json, or an Image (.png, .jpg) to process.</p>
-        <input type="file" id="file-upload" accept=".txt,.csv,.json,.png,.jpg,.jpeg">
-        <div class="toolbar" style="justify-content: center; margin-top: 15px;">
-          <button id="btn-scrub-file" class="primary-btn" style="width: auto;">Process & Scrub File</button>
-          <button id="btn-scan-file" class="secondary-btn" style="margin-top: 0; width: auto;">Scan & Verify File</button>
-        </div>
-        <div id="file-status" class="status-msg" style="margin-top: 15px;"></div>
-      </div>
-    </div> -->
-
     <div id="view-inspector" class="view hidden">
       <div class="toolbar">
         <button id="btn-build-tree" class="primary-btn">Generate Tree from IDE Text</button>
       </div>
-      <div class="status-msg" style="color: #6b7280; background: transparent; border: none; padding-left: 0;">Analyzes the raw text currently sitting in your IDE tab.</div>
-      
+      <div class="status-msg" style="color: #6b7280; background: transparent; border: none; padding-left: 0;">Analyzes the raw HL7 message in your IDE tab using TMS 1-based field descriptors (SEG-Field[Rep].Comp[Subcomp]).</div>
+
       <div id="tree-container" class="hl7-tree-container">
         <p class="subtitle" style="text-align:center; margin-top:40px;">Paste HL7 in the 'IDE Text' tab, then click Generate to inspect.</p>
       </div>
     </div>
-
   </div>
+
+  <script src="mirth.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
