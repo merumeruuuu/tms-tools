@@ -837,6 +837,7 @@ class DataSeederApp {
             let val = input.value;
             const isNumber = ['caloricValue', 'displacement', 'expirationOpened', 'expirationPrepared', 'unitQuantity', 'measurementVolume', 'atomicUnits', 'decimalPlaces'].includes(key);
             if (isNumber) val = parseFloat(val) || 0;
+            else if (typeof val === 'string') val = val.trim();
             product[key] = val;
         });
 
@@ -863,6 +864,7 @@ class DataSeederApp {
                 const key = input.dataset.key;
                 let val = input.value;
                 if (key === 'quantity' || key === 'volume') val = parseFloat(val) || 0;
+                else if (typeof val === 'string') val = val.trim();
                 if (product.hierarchy[index]) product.hierarchy[index][key] = val;
             });
         }
@@ -875,6 +877,7 @@ class DataSeederApp {
                 const key = input.dataset.key;
                 let val = input.value;
                 if (key === 'newQuantity') val = val !== '' ? (parseInt(val, 10) || 0) : '';
+                else if (typeof val === 'string') val = val.trim();
                 if (product.containerUpdates[index]) product.containerUpdates[index][key] = val;
             });
         }
@@ -1044,7 +1047,7 @@ class DataSeederApp {
             const rawItemNumText = getVal('Item Number');
             const itemNumberMatch = rawItemNumText.match(/\bwhich\s+is\s+([A-Z0-9][A-Z0-9-]*)\b/i)
                 || rawItemNumText.match(/\b(?:item\s+)?number\s*(?:is|:)\s*([A-Z0-9][A-Z0-9-]*)\b/i);
-            const rawItemNum = itemNumberMatch ? itemNumberMatch[1] : rawItemNumText;
+            const rawItemNum = (itemNumberMatch ? itemNumberMatch[1] : rawItemNumText).trim();
             const rawMfg = getVal('Manufacturer');
             const rawType = getVal('Product Type');
             const rawUse = getVal('Product Use');
@@ -1142,7 +1145,7 @@ class DataSeederApp {
 
             for (let i = 0; i < maxCols; i++) {
                 const cid = resolveContainerTypeId(types[i] || '', '');
-                const bc = barcodes[i] || '';
+                const bc = (barcodes[i] || '').trim();
                 const qty = parseInt(quantities[i]) || (i === maxCols - 1 ? 1 : 0);
                 const vol = parseFloat(volumes[i]) || 0;
 
@@ -1195,6 +1198,48 @@ class DataSeederApp {
         }
     }
 
+    buildApiProductHierarchy(basicData) {
+        const hierarchy = [];
+
+        // Innermost unit first (index 0)
+        const primaryPkg = (basicData.PrimaryPackage || '').trim();
+        const primaryBc = (basicData.PrimaryBarcode || '').trim();
+        if (primaryPkg || primaryBc) {
+            hierarchy.push({
+                containerId: resolveContainerTypeId(primaryPkg, '1'),
+                barcode: primaryBc,
+                quantity: 1,
+                volume: parseFloat(basicData.Displacement) || 0
+            });
+        }
+
+        // Optional middle carton
+        const cartonBc = (basicData.CartonBarcode || '').trim();
+        if (cartonBc) {
+            hierarchy.push({
+                containerId: '2',
+                barcode: cartonBc,
+                quantity: 1,
+                volume: 0
+            });
+        }
+
+        // Optional outer case
+        const caseBc = (basicData.CaseBarcode || '').trim();
+        if (caseBc) {
+            hierarchy.push({
+                containerId: '4',
+                barcode: caseBc,
+                quantity: 1,
+                volume: 0
+            });
+        }
+
+        return hierarchy.length > 0
+            ? hierarchy
+            : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }];
+    }
+
     updateApiSelectionCount() {
         const checked = document.querySelectorAll('.api-product-cb:checked').length;
         document.getElementById('apiSelectedCount').textContent = `${checked} product(s) selected`;
@@ -1219,6 +1264,53 @@ class DataSeederApp {
             document.getElementById('previewModal').classList.add('hidden');
         });
 
+        document.getElementById('stageSelectedApiBtn').addEventListener('click', () => {
+            const checkedBoxes = Array.from(document.querySelectorAll('.api-product-cb:checked'));
+            if (checkedBoxes.length === 0) return;
+
+            let newlyAdded = 0;
+            checkedBoxes.forEach(cb => {
+                const itemId = String(cb.value);
+                if (this.products.some(prod => prod.apiItemId === itemId)) return;
+
+                const basicData = (apiService.cachedProducts || []).find(p => String(p.ItemID) === itemId);
+                if (!basicData) return;
+
+                this.products.push({
+                    apiItemId: itemId,
+                    action: 'create',
+                    manufacturer: (basicData.ManufacturerName || 'Undefined').trim(),
+                    productName: (basicData.FamilyName || 'Imported Product').replace(/[®™©]/g, '').trim(),
+                    shortName: (basicData.ItemFlavor || '').replace(/[®™©]/g, '').trim(),
+                    productCode: (basicData.ItemNumber || '').trim(),
+                    barcode: (basicData.PrimaryBarcode || '').trim(),
+                    productType: (basicData.FormType || '').toLowerCase().includes('powder') || (basicData.FormType || '').toUpperCase() === 'PWD' ? '3' : '1',
+                    useContexts: ['feed-base'],
+                    additiveMethod: 'standard',
+                    additiveUnit: 'ml',
+                    atomicUnits: 1,
+                    decimalPlaces: 0,
+                    categoryId: '3',
+                    caloricValue: parseFloat(basicData.Calorie) || 20,
+                    displacement: parseFloat(basicData.Displacement) || 0,
+                    expirationOpened: 48,
+                    expirationPrepared: 0,
+                    measurementUnit: 'ml',
+                    hierarchy: this.buildApiProductHierarchy(basicData)
+                });
+                newlyAdded++;
+            });
+
+            if (newlyAdded > 0) {
+                this.currentAction = 'create';
+                this.renderProductsTable();
+                this.saveProgress();
+                this.showStatus(`Staged ${newlyAdded} product(s) to batch!`, 'success');
+            } else {
+                this.showStatus('All selected products are already in the batch.', 'info');
+            }
+        });
+
         document.getElementById('apiResultsBody').addEventListener('change', async (e) => {
             if (!e.target.classList.contains('api-product-cb')) return;
 
@@ -1228,34 +1320,33 @@ class DataSeederApp {
             if (cb.checked) {
                 try {
                     cb.disabled = true;
-                    this.showStatus('Fetching details...', 'info');
+                    this.showStatus('Staging product...', 'info');
 
                     const detailedItems = await apiService.fetchProductDetails([itemId]);
-                    if (detailedItems && detailedItems.length > 0) {
-                        const apiItem = detailedItems[0];
-                        const basicData = apiService.cachedProducts.find(p => p.ItemID.toString() === itemId.toString()) || {};
+                    const apiItem = (detailedItems && detailedItems[0]) || {};
+                    const basicData = (apiService.cachedProducts || []).find(p => String(p.ItemID) === String(itemId)) || apiItem;
 
-                        let calValue = 20;
+                    if (basicData && (basicData.ItemID || basicData.FamilyName)) {
+                        let calValue = parseFloat(basicData.Calorie) || 20;
                         if (apiItem.Nutrients && Array.isArray(apiItem.Nutrients)) {
                             const calObj = apiItem.Nutrients.find(n => (n.Description || '').toLowerCase().includes('calorie'));
                             if (calObj && calObj.Value) calValue = parseFloat(calObj.Value) || calValue;
                         }
 
-                        let hierarchy = [];
-                        if (basicData.PrimaryPackage) {
-                            const cId = resolveContainerTypeId(basicData.PrimaryPackage, '1');
-                            hierarchy.push({ containerId: cId, barcode: basicData.PrimaryBarcode || '', quantity: 1, volume: parseFloat(basicData.Displacement) || 0 });
-                        }
+                        const formTypeStr = (basicData.FormType || '').toLowerCase();
+                        const isPowder = formTypeStr.includes('powder') || formTypeStr === 'pwd';
+                        const isConcentrate = formTypeStr.includes('concentrate') || formTypeStr === 'conc';
 
+                        this.currentAction = 'create';
                         this.products.push({
-                            apiItemId: itemId.toString(),
+                            apiItemId: String(itemId),
                             action: 'create',
-                            manufacturer: 'Undefined',
+                            manufacturer: (basicData.ManufacturerName || 'Undefined').trim(),
                             productName: (basicData.FamilyName || 'Imported Product').replace(/[®™©]/g, '').trim(),
                             shortName: (basicData.ItemFlavor || '').replace(/[®™©]/g, '').trim(),
-                            productCode: apiItem.ItemNumber || basicData.ItemNumber || '',
-                            barcode: basicData.PrimaryBarcode || '',
-                            productType: (basicData.FormType || '').toLowerCase().includes('powder') ? '3' : '1',
+                            productCode: (apiItem.ItemNumber || basicData.ItemNumber || '').trim(),
+                            barcode: (basicData.PrimaryBarcode || '').trim(),
+                            productType: isPowder ? '3' : (isConcentrate ? '2' : '1'),
                             useContexts: ['feed-base'],
                             additiveMethod: 'standard',
                             additiveUnit: 'ml',
@@ -1267,7 +1358,7 @@ class DataSeederApp {
                             expirationOpened: 48,
                             expirationPrepared: 0,
                             measurementUnit: 'ml',
-                            hierarchy: hierarchy.length > 0 ? hierarchy : [{ containerId: '1', barcode: '', quantity: 1, volume: 100 }]
+                            hierarchy: this.buildApiProductHierarchy(basicData)
                         });
 
                         this.renderProductsTable();
@@ -1281,7 +1372,7 @@ class DataSeederApp {
                     cb.disabled = false;
                 }
             } else {
-                const index = this.products.findIndex(p => p.apiItemId === itemId.toString());
+                const index = this.products.findIndex(p => p.apiItemId === String(itemId));
                 if (index !== -1) {
                     this.products.splice(index, 1);
                     this.renderProductsTable();
@@ -1320,7 +1411,9 @@ class DataSeederApp {
 
         document.getElementById('apiLoadCatalogBtn').addEventListener('click', async () => {
             if (!apiService.isConfigured()) {
-                this.showStatus('Please configure API settings first.', 'error');
+                this.showStatus('Please configure API Base URL and Token first.', 'error');
+                document.getElementById('apiBaseUrl').value = apiService.config.baseUrl || '';
+                document.getElementById('apiToken').value = apiService.config.token || '';
                 document.getElementById('apiSettingsModal').classList.remove('hidden');
                 return;
             }
@@ -1336,52 +1429,28 @@ class DataSeederApp {
                 btn.textContent = 'Loading...';
                 progWrapper.style.display = 'block';
                 progBar.style.width = '0%';
+                progText.textContent = 'Fetching active products...';
 
-                const baseUrl = apiService.config.baseUrl.replace(/\/$/, '');
-                const facId = apiService.config.facilityId;
-                const headers = { 'Authorization': `Bearer ${apiService.config.token}`, 'Content-Type': 'application/json' };
+                const allProducts = await apiService.fetchProducts((loaded, total) => {
+                    const percentage = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 50;
+                    progBar.style.width = `${percentage}%`;
+                    progText.textContent = total > 0
+                        ? `Downloading... ${loaded} / ${total} (${percentage}%)`
+                        : `Downloading... ${loaded} products`;
+                });
 
-                const initialUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/0/1`;
-                const response = await fetch(initialUrl, { headers });
-                const json = await response.json();
-
-                let allProducts = json.data?.ProductData || [];
-                const totalRecords = json.data?.TotalRecords || 0;
-                if (totalRecords === 0 || allProducts.length === 0) {
-                    this.showStatus('No products found for this facility. Please select a different one.', 'error');
-
-                    document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
-                    document.getElementById('apiToken').value = apiService.config.token;
+                if (!allProducts || allProducts.length === 0) {
+                    this.showStatus('No active products returned from TMNS. Check your API settings.', 'error');
+                    document.getElementById('apiBaseUrl').value = apiService.config.baseUrl || '';
+                    document.getElementById('apiToken').value = apiService.config.token || '';
                     document.getElementById('apiSettingsModal').classList.remove('hidden');
 
                     btn.disabled = false;
-                    btn.textContent = '⬇️ Load Catalog';
+                    btn.textContent = '⬇️ Load Products From TMNS';
                     progWrapper.style.display = 'none';
                     return;
                 }
-                const limit = json.data?.Limit || 10;
-                let loadedCount = limit;
 
-                if (totalRecords > limit) {
-                    const fetchPromises = [];
-                    for (let offset = limit; offset < totalRecords; offset += limit) {
-                        const pageUrl = `${baseUrl}/api/internal/cpoe/v1/get-product-by-facility/${facId}/${offset}/1`;
-
-                        const req = fetch(pageUrl, { headers }).then(res => res.json()).then(pageJson => {
-                            allProducts = allProducts.concat(pageJson.data?.ProductData || []);
-                            loadedCount += limit;
-
-                            const percentage = Math.min(100, Math.round((loadedCount / totalRecords) * 100));
-                            progBar.style.width = `${percentage}%`;
-                            progText.textContent = `Downloading... ${percentage}%`;
-                        }).catch(e => console.warn(e));
-
-                        fetchPromises.push(req);
-                    }
-                    await Promise.all(fetchPromises);
-                }
-
-                apiService.cachedProducts = allProducts;
                 if (typeof idbKeyval !== 'undefined') {
                     await idbKeyval.set('cachedApiProducts', allProducts);
                 }
@@ -1396,23 +1465,27 @@ class DataSeederApp {
                 btn.style.borderColor = '#10b981';
                 document.getElementById('apiTotalLoadedCount').textContent = `(${allProducts.length} products loaded)`;
                 searchInput.dispatchEvent(new Event('input'));
-                setTimeout(() => progWrapper.style.display = 'none', 2000);
-                this.showStatus(`Successfully loaded ${allProducts.length} products!`, 'success');
+                setTimeout(() => { progWrapper.style.display = 'none'; }, 2000);
+                this.showStatus(`Successfully loaded ${allProducts.length} active products!`, 'success');
 
             } catch (error) {
                 this.showStatus(error.message, 'error');
                 btn.disabled = false;
-                btn.textContent = '⬇️ Load Catalog';
+                btn.textContent = '⬇️ Load Products From TMNS';
                 progWrapper.style.display = 'none';
             }
         });
 
         const apiModal = document.getElementById('apiSettingsModal');
+        const apiStatusBox = document.getElementById('apiConnectionStatus');
 
         document.getElementById('openApiSettingsBtn').addEventListener('click', () => {
-            document.getElementById('apiBaseUrl').value = apiService.config.baseUrl;
-            document.getElementById('apiToken').value = apiService.config.token;
-            document.getElementById('facilitySelectionWrapper').classList.add('hidden');
+            document.getElementById('apiBaseUrl').value = apiService.config.baseUrl || '';
+            document.getElementById('apiToken').value = apiService.config.token || '';
+            if (apiStatusBox) {
+                apiStatusBox.classList.add('hidden');
+                apiStatusBox.textContent = '';
+            }
             apiModal.classList.remove('hidden');
         });
 
@@ -1426,43 +1499,51 @@ class DataSeederApp {
             const btn = document.getElementById('testApiConnectionBtn');
 
             if (!baseUrl || !token) {
-                this.showStatus('URL and Token are required', 'error');
+                this.showStatus('API Base URL and Token are required', 'error');
                 return;
             }
 
             try {
-                btn.textContent = 'Connecting...';
+                btn.textContent = 'Testing...';
                 btn.disabled = true;
 
-                const facilities = await apiService.fetchFacilities(baseUrl, token);
+                const result = await apiService.testConnection(baseUrl, token);
 
-                const select = document.getElementById('apiFacilitySelect');
-                select.innerHTML = facilities.map(f =>
-                    `<option value="${f.FacilityID}">${f.FacilityName} (${f.EnterpriseName})</option>`
-                ).join('');
-
-                if (apiService.config.facilityId) {
-                    select.value = apiService.config.facilityId;
+                if (apiStatusBox) {
+                    apiStatusBox.textContent = `✅ Connection Successful! (${result.totalRecords} active products available)`;
+                    apiStatusBox.classList.remove('hidden');
                 }
-
-                document.getElementById('facilitySelectionWrapper').classList.remove('hidden');
-                this.showStatus('Facilities loaded successfully!', 'success');
+                this.showStatus('Connection successful!', 'success');
             } catch (error) {
+                if (apiStatusBox) apiStatusBox.classList.add('hidden');
                 this.showStatus(error.message, 'error');
             } finally {
-                btn.textContent = 'Test Connection & Fetch Facilities';
+                btn.textContent = 'Test Connection';
                 btn.disabled = false;
             }
         });
 
         document.getElementById('saveApiSettingsBtn').addEventListener('click', () => {
-            const select = document.getElementById('apiFacilitySelect');
-            apiService.saveConfig({
-                baseUrl: document.getElementById('apiBaseUrl').value.trim(),
-                token: document.getElementById('apiToken').value.trim(),
-                facilityId: select.value,
-                facilityName: select.options[select.selectedIndex].text
-            });
+            const baseUrl = document.getElementById('apiBaseUrl').value.trim();
+            const token = document.getElementById('apiToken').value.trim();
+
+            if (!baseUrl || !token) {
+                this.showStatus('API Base URL and Token are required', 'error');
+                return;
+            }
+
+            apiService.saveConfig({ baseUrl, token });
+
+            // Re-enable Load Products button so user can refresh catalog from the updated endpoint
+            const loadBtn = document.getElementById('apiLoadCatalogBtn');
+            if (loadBtn) {
+                loadBtn.disabled = false;
+                loadBtn.innerHTML = '⬇️ Load Products From TMNS';
+                loadBtn.style.background = '#f1f5f9';
+                loadBtn.style.color = '#0f172a';
+                loadBtn.style.borderColor = '#cbd5e1';
+            }
+
             apiModal.classList.add('hidden');
             this.showStatus('API Configured Successfully!', 'success');
         });
@@ -2733,7 +2814,7 @@ class DataSeederApp {
                     || fieldElement?.querySelector('[data-field-name="manufacturerOther"]');
                 data[field.name] = otherInput ? otherInput.value.trim() : '';
             } else {
-                data[field.name] = field.numeric ? (parseFloat(raw) || 0) : raw;
+                data[field.name] = field.numeric ? (parseFloat(raw) || 0) : String(raw).trim();
             }
         });
 
@@ -2969,7 +3050,10 @@ class DataSeederApp {
             if (!searchInput) return true;
             return (p.FamilyName || '').toLowerCase().includes(searchInput) ||
                    (p.ItemNumber || '').toLowerCase().includes(searchInput) ||
-                   (p.PrimaryBarcode || '').toLowerCase().includes(searchInput);
+                   (p.ManufacturerName || '').toLowerCase().includes(searchInput) ||
+                   (p.PrimaryBarcode || '').toLowerCase().includes(searchInput) ||
+                   (p.CartonBarcode || '').toLowerCase().includes(searchInput) ||
+                   (p.CaseBarcode || '').toLowerCase().includes(searchInput);
         }).slice(0, 50);
 
         if (filtered.length === 0) {
@@ -2978,8 +3062,9 @@ class DataSeederApp {
         }
 
         tbody.innerHTML = filtered.map(p => {
-            const isChecked = this.products.some(prod => prod.apiItemId === p.ItemID.toString()) ? 'checked' : '';
+            const isChecked = this.products.some(prod => prod.apiItemId === String(p.ItemID)) ? 'checked' : '';
             const cleanFamilyName = (p.FamilyName || 'Unnamed Product').replace(/[®™©]/g, '').trim();
+            const mfgLabel = p.ManufacturerName ? ` | Mfg: ${p.ManufacturerName}` : '';
 
             return `
             <tr>
@@ -2988,10 +3073,11 @@ class DataSeederApp {
                 </td>
                 <td>
                     <strong style="color: #0f172a;">${cleanFamilyName}</strong><br>
-                    <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}</span>
+                    <span style="font-size: 11px; color: #64748b;">Item #: ${p.ItemNumber || 'N/A'} | Type: ${p.FormType || 'N/A'}${mfgLabel}</span>
                 </td>
                 <td style="font-size: 12px; color: #475569;">
-                    ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage} (${p.PrimaryBarcode})<br>` : ''}
+                    ${p.PrimaryPackage ? `Inner: ${p.PrimaryPackage}${p.PrimaryBarcode ? ` (${p.PrimaryBarcode})` : ''}<br>` : ''}
+                    ${p.CaseBarcode ? `Case: ${p.CaseBarcode}<br>` : ''}
                     ${p.Calorie ? `Calories: ${p.Calorie}` : ''}
                 </td>
             </tr>

@@ -107,13 +107,13 @@
                             <div id="liveCatalog-tab" class="form-tab-content">
                                 <div class="product-form-group">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                        <label style="margin: 0;">Search External Formulary <span id="apiTotalLoadedCount" style="color: #64748b; font-weight: normal; margin-left: 8px;"></span></label>
+                                        <label style="margin: 0;">Search Active Products <span id="apiTotalLoadedCount" style="color: #64748b; font-weight: normal; margin-left: 8px;"></span></label>
                                         <button id="apiLoadCatalogBtn" class="btn btn-secondary btn-small" style="background: #f1f5f9; color: #0f172a; border-color: #cbd5e1;">
                                             ⬇️ Load Products From TMNS
                                         </button>
                                     </div>
                                     <div style="display: flex; gap: 10px;">
-                                        <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, or barcode..." style="flex: 1;" disabled>
+                                        <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, manufacturer, or barcode..." style="flex: 1;" disabled>
                                     </div>
 
                                     <div id="apiLoadProgressWrapper" style="display: none; margin-top: 12px;">
@@ -138,7 +138,7 @@
                                             <tbody id="apiResultsBody">
                                                 <tr class="empty-state">
                                                     <td colspan="3" style="text-align:center; padding:50px 20px; color:#94a3b8;">
-                                                        Connect to a facility and search to view live products.
+                                                        Click "Load Products From TMNS" to fetch active products.
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -286,7 +286,7 @@
 
             <div class="product-form-group">
                 <label>API Base URL</label>
-                <input type="text" id="apiBaseUrl" class="input-field" placeholder="https://...">
+                <input type="text" id="apiBaseUrl" class="input-field" placeholder="https://nutritionsourceqa2.internal.timelessmedical.com">
             </div>
 
             <div class="product-form-group">
@@ -294,13 +294,11 @@
                 <input type="password" id="apiToken" class="input-field" placeholder="Paste your token here...">
             </div>
 
-            <button id="testApiConnectionBtn" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">Test Connection & Fetch Facilities</button>
+            <div id="apiConnectionStatus" class="hidden" style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 10px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 14px;"></div>
 
-            <div id="facilitySelectionWrapper" class="product-form-group hidden" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                <label style="color: #10b981;">Connection Successful!</label>
-                <label style="margin-top: 10px;">Select Target Facility</label>
-                <select id="apiFacilitySelect" class="input-field" style="margin-bottom: 15px;"></select>
-                <button id="saveApiSettingsBtn" class="btn btn-primary" style="width: 100%;">Save Configuration</button>
+            <div style="display: flex; gap: 10px;">
+                <button id="testApiConnectionBtn" class="btn btn-secondary" style="flex: 1;">Test Connection</button>
+                <button id="saveApiSettingsBtn" class="btn btn-primary" style="flex: 1;">Save Configuration</button>
             </div>
         </div>
     </div>
