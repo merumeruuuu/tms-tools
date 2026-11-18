@@ -4,6 +4,8 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
     const T = DB_SCHEMA.TABLES;
     const C = DB_SCHEMA.COLUMNS;
 
+    const esc = (val) => String(val ?? '').trim().replace(/'/g, "\\'");
+
     const ffMappings = {
         '1': 'Bottle',
         '2': 'Carton',
@@ -53,7 +55,7 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
             const canBeBase = contexts.includes('feed-base') ? 1 : 0;
             const canBeFortifier = contexts.includes('additive') ? 1 : 0;
             const canBeModular = contexts.includes('modular') ? 1 : 0;
-            const addUnit = (product.additiveUnit || product.measurementUnit || 'ml').replace(/'/g, "\\'");
+            const addUnit = esc(product.additiveUnit || product.measurementUnit || 'ml');
             const atomicUnits = parseFloat(product.atomicUnits) || 1;
             const decimalPlaces = product.decimalPlaces !== undefined
                 ? (parseInt(product.decimalPlaces, 10) || 0)
@@ -72,7 +74,7 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                 let hArray = product.hierarchy.map(ff => {
                     return `[
                         'name' => '${ffMappings[ff.containerId] || 'Bottle'}',
-                        'barcode' => '${(ff.barcode || '').replace(/'/g, "\\'")}',
+                        'barcode' => '${esc(ff.barcode)}',
                         'quantity' => ${ff.quantity || 0},
                         'volume' => ${ff.volume || product.measurementVolume || 100}
                     ]`;
@@ -80,20 +82,20 @@ window.SeederTemplates.Q3 = function(className, products, action, buildInfo) {
                 hierarchyStr = `[\n                    ${hArray.join(',\n                    ')}\n                ]`;
             } else {
                 hierarchyStr = `[[
-                    'name' => 'Bottle', 'barcode' => '${(product.productCode || '').replace(/'/g, "\\'")}',
+                    'name' => 'Bottle', 'barcode' => '${esc(product.productCode)}',
                     'quantity' => ${product.unitQuantity || 1}, 'volume' => ${product.measurementVolume || 100}
                 ]]`;
             }
 
             return `            [
-                'productName' => '${(product.productName || '').replace(/'/g, "\\'")}',
-                'barcode' => '${(product.productCode || '').replace(/'/g, "\\'")}',
-                'manufacturer' => '${(product.manufacturer || 'Undefined').replace(/'/g, "\\'")}',
-                'shortName' => '${(product.shortName || product.productName || '').replace(/'/g, "\\'")}',
-                'hl7Reference' => '${(product.hl7Reference || '').replace(/'/g, "\\'")}',
+                'productName' => '${esc(product.productName)}',
+                'barcode' => '${esc(product.productCode)}',
+                'manufacturer' => '${esc(product.manufacturer || 'Undefined')}',
+                'shortName' => '${esc(product.shortName || product.productName)}',
+                'hl7Reference' => '${esc(product.hl7Reference)}',
                 'productType' => ${product.productType || 1},
                 'catName' => '${catName}',
-                'unitName' => '${product.measurementUnit || 'ml'}',
+                'unitName' => '${esc(product.measurementUnit || 'ml')}',
                 'expirationOpened' => ${product.expirationOpened || 48},
                 'caloricValue' => ${product.caloricValue || 20},
                 'displacement' => ${product.displacement || 0.00},
@@ -117,12 +119,12 @@ ${createData}
         ];
 
         foreach ($createProducts as $p) {
-            $productName = $p['productName'];
-            $barcode = $p['barcode'];
+            $productName = trim($p['productName']);
+            $barcode = trim($p['barcode']);
 
             $mfgId = DB::table('${T.MANUFACTURERS}')
-                ->where('ManufacturerName', 'like', '%' . $p['manufacturer'] . '%')
-                ->orWhere('ManufacturerDescription', 'like', '%' . $p['manufacturer'] . '%')
+                ->where('ManufacturerName', 'like', '%' . trim($p['manufacturer']) . '%')
+                ->orWhere('ManufacturerDescription', 'like', '%' . trim($p['manufacturer']) . '%')
                 ->value('ManufacturerID')
                 ?? DB::table('${T.MANUFACTURERS}')->where('ManufacturerName', 'Undefined')->value('ManufacturerID') ?? 3;
 
@@ -133,8 +135,8 @@ ${createData}
             $product = NutritionProductType::firstOrCreate(
                 ['${C.NAME}' => $productName],
                 [
-                    '${C.SHORT_NAME}' => $p['shortName'],
-                    '${C.HL7_REF}' => $p['hl7Reference'],
+                    '${C.SHORT_NAME}' => trim($p['shortName']),
+                    '${C.HL7_REF}' => trim($p['hl7Reference']),
                     '${C.MFG_ID}' => $mfgId,
                     'formtypeSupportsDirectScanning' => 1,
                     '${C.TYPE}' => $p['productType'],
@@ -271,7 +273,7 @@ ${createData}
                         '${C.FF_TYPE_ID}' => $ffTypeId,
                         '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
                         '${C.FF_PARENT}' => $parentId,
-                        '${C.FF_BARCODE}' => $ff['barcode'],
+                        '${C.FF_BARCODE}' => trim($ff['barcode']),
                         '${C.FF_QTY}' => $ff['quantity'],
                         '${C.IS_PROTECTED}' => 1,
                         'formfactorActive' => 1,
@@ -289,6 +291,24 @@ ${createData}
                     DB::table('${T.APPLICABLE_FF}')->insert([
                         "productTypeID" => $product->${C.ID},
                         "formFactorTypeID" => $nptItem->${C.FF_TYPE_ID}
+                    ]);
+                }
+
+                if (!$product->wasRecentlyCreated) {
+                    NutritionProductTypeHistory::create([
+                        'fthistBarcode'            => $barcode,
+                        'fthistFormulaID'          => $product->${C.ID},
+                        'fthistAction'             => 9001,
+                        'fthistDateTime'           => Carbon::now(),
+                        'fthistUser'               => 1,
+                        'fthistName'               => $product->${C.NAME},
+                        'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
+                        'fthistType'               => $product->${C.TYPE},
+                        'fthistCategoryID'         => $product->${C.CATEGORY},
+                        'fthistMeasurementUnit'    => $product->${C.UOM},
+                        'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
+                        'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
+                        'fthistDisplacement'       => $product->${C.DISPLACEMENT},
                     ]);
                 }
 
@@ -310,11 +330,11 @@ ${createData}
             let useContextConfig = null;
 
             if (product.updateFields.includes('productName')) {
-                const updatedProductName = (product.newProductName || product.productName || '').replace(/'/g, "\\'");
+                const updatedProductName = esc(product.newProductName || product.productName);
                 fields.push(`'${C.NAME}' => '${updatedProductName}'`);
             }
-            if (product.updateFields.includes('shortName')) fields.push(`'${C.SHORT_NAME}' => '${(product.shortName || '').replace(/'/g, "\\'")}'`);
-            if (product.updateFields.includes('hl7Reference')) fields.push(`'${C.HL7_REF}' => '${(product.hl7Reference || '').replace(/'/g, "\\'")}'`);
+            if (product.updateFields.includes('shortName')) fields.push(`'${C.SHORT_NAME}' => '${esc(product.shortName)}'`);
+            if (product.updateFields.includes('hl7Reference')) fields.push(`'${C.HL7_REF}' => '${esc(product.hl7Reference)}'`);
             if (product.updateFields.includes('productType')) fields.push(`'${C.TYPE}' => ${product.productType}`);
             if (product.updateFields.includes('categoryId')) fields.push(`'${C.CATEGORY}' => ${product.categoryId}`);
 
@@ -331,7 +351,7 @@ ${createData}
                 const canBeBase = contexts.includes('feed-base') ? 1 : 0;
                 const canBeFortifier = contexts.includes('additive') ? 1 : 0;
                 const canBeModular = contexts.includes('modular') ? 1 : 0;
-                const addUnit = (product.additiveUnit || product.measurementUnit || 'ml').replace(/'/g, "\\'");
+                const addUnit = esc(product.additiveUnit || product.measurementUnit || 'ml');
                 const atomicUnits = parseFloat(product.atomicUnits) || 1;
                 const decimalPlaces = product.decimalPlaces !== undefined
                     ? (parseInt(product.decimalPlaces, 10) || 0)
@@ -354,9 +374,9 @@ ${createData}
                 ]`;
             }
 
-            if (product.updateFields.includes('manufacturer')) mfgSearch = (product.manufacturer || '').replace(/'/g, "\\'");
+            if (product.updateFields.includes('manufacturer')) mfgSearch = esc(product.manufacturer);
             if (product.updateFields.includes('measurementUnit')) {
-                unitName = (product.measurementUnit || 'ml');
+                unitName = esc(product.measurementUnit || 'ml');
                 fields.push(`'${C.UOM}' => '${unitName}'`);
             }
 
@@ -366,7 +386,7 @@ ${createData}
             if (useContextConfig) extraLines.push(useContextConfig);
 
             return `            [
-                'productName' => '${(product.productName || '').replace(/'/g, "\\'")}',
+                'productName' => '${esc(product.productName)}',
                 ${extraLines.length ? extraLines.join(',\n                ') + ',' : ''}
                 'updates' => [
                     ${fields.join(',\n                    ')}
@@ -383,15 +403,17 @@ ${updateData}
         ];
 
         foreach ($updateProducts as $p) {
-            $product = NutritionProductType::where('${C.NAME}', $p['productName'])->first();
+            $targetName = trim($p['productName']);
+            $product = NutritionProductType::where('${C.NAME}', $targetName)->first();
 
             if ($product) {
                 $updateData = $p['updates'];
 
                 if (isset($p['mfgSearch'])) {
+                    $mfgSearch = trim($p['mfgSearch']);
                     $mfgId = DB::table('${T.MANUFACTURERS}')
-                        ->where('ManufacturerName', 'like', '%' . $p['mfgSearch'] . '%')
-                        ->orWhere('ManufacturerDescription', 'like', '%' . $p['mfgSearch'] . '%')
+                        ->where('ManufacturerName', 'like', '%' . $mfgSearch . '%')
+                        ->orWhere('ManufacturerDescription', 'like', '%' . $mfgSearch . '%')
                         ->value('ManufacturerID') ?? DB::table('${T.MANUFACTURERS}')->where('ManufacturerName', 'Undefined')->value('ManufacturerID') ?? 3;
                     $updateData['${C.MFG_ID}'] = $mfgId;
                 }
@@ -507,12 +529,12 @@ ${updateData}
                         'fthistDisplacement'       => $product->${C.DISPLACEMENT},
                     ]);
 
-                    $this->command->info("-> Updated product: " . $p['productName']);
+                    $this->command->info("-> Updated product: " . $targetName);
                 } else {
-                    $this->command->warn("-> No fields to update for: " . $p['productName']);
+                    $this->command->warn("-> No fields to update for: " . $targetName);
                 }
             } else {
-                $this->command->error("-> Skipped Update: Product not found -> " . $p['productName']);
+                $this->command->error("-> Skipped Update: Product not found -> " . $targetName);
             }
         }\n`;
     }
@@ -522,7 +544,7 @@ ${updateData}
     // ==========================================
     if (barcodeUpdates.length > 0) {
         let barcodeData = barcodeUpdates.map(product => {
-            return `            ['old' => '${(product.oldProductCode || '').replace(/'/g, "\\'")}', 'new' => '${(product.newProductCode || '').replace(/'/g, "\\'")}']`;
+            return `            ['old' => '${esc(product.oldProductCode)}', 'new' => '${esc(product.newProductCode)}']`;
         }).join(',\n');
 
         operationCode += `
@@ -534,16 +556,55 @@ ${barcodeData}
         ];
 
         foreach ($barcodeUpdates as $b) {
-            $itemUpdated = NutritionProductTypeItem::where('${C.ITEM_CODE}', $b['old'])
-                ->update(['${C.ITEM_CODE}' => $b['new']]);
+            $oldBc = trim($b['old']);
+            $newBc = trim($b['new']);
 
-            $ffUpdated = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $b['old'])
-                ->update(['${C.FF_BARCODE}' => $b['new']]);
+            $productRecord = NutritionProductType::where('${C.BARCODE}', $oldBc)->first();
+            $itemRecord = NutritionProductTypeItem::where('${C.ITEM_CODE}', $oldBc)->first();
+            $ffRecord = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $oldBc)->first();
 
-            if ($itemUpdated || $ffUpdated) {
-                $this->command->info("-> Updated Barcode: " . $b['old'] . " to " . $b['new']);
+            $prodUpdated = NutritionProductType::where('${C.BARCODE}', $oldBc)
+                ->update(['${C.BARCODE}' => $newBc]);
+
+            $itemUpdated = NutritionProductTypeItem::where('${C.ITEM_CODE}', $oldBc)
+                ->update(['${C.ITEM_CODE}' => $newBc]);
+
+            $ffUpdated = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $oldBc)
+                ->update(['${C.FF_BARCODE}' => $newBc]);
+
+            if ($prodUpdated || $itemUpdated || $ffUpdated) {
+                $product = $productRecord ? $productRecord->fresh() : null;
+                if (!$product && $itemRecord) {
+                    $product = NutritionProductType::find($itemRecord->${C.ID});
+                }
+                if (!$product && $ffRecord) {
+                    $parentItem = NutritionProductTypeItem::find($ffRecord->${C.ITEM_ID});
+                    if ($parentItem) {
+                        $product = NutritionProductType::find($parentItem->${C.ID});
+                    }
+                }
+
+                if ($product) {
+                    NutritionProductTypeHistory::create([
+                        'fthistBarcode'            => $newBc,
+                        'fthistFormulaID'          => $product->${C.ID},
+                        'fthistAction'             => 9001,
+                        'fthistDateTime'           => Carbon::now(),
+                        'fthistUser'               => 1,
+                        'fthistName'               => $product->${C.NAME},
+                        'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
+                        'fthistType'               => $product->${C.TYPE},
+                        'fthistCategoryID'         => $product->${C.CATEGORY},
+                        'fthistMeasurementUnit'    => $product->${C.UOM},
+                        'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
+                        'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
+                        'fthistDisplacement'       => $product->${C.DISPLACEMENT},
+                    ]);
+                }
+
+                $this->command->info("-> Updated Barcode: " . $oldBc . " to " . $newBc);
             } else {
-                $this->command->warn("-> Skipped: Old barcode " . $b['old'] . " not found.");
+                $this->command->warn("-> Skipped: Old barcode " . $oldBc . " not found.");
             }
         }\n`;
     }
@@ -558,7 +619,7 @@ ${barcodeData}
                 let hArray = product.hierarchy.map(ff => {
                     return `[
                         'name' => '${ffMappings[ff.containerId] || 'Bottle'}',
-                        'barcode' => '${(ff.barcode || '').replace(/'/g, "\\'")}',
+                        'barcode' => '${esc(ff.barcode)}',
                         'quantity' => ${ff.quantity || 0},
                         'volume' => ${ff.volume || 100}
                     ]`;
@@ -567,8 +628,8 @@ ${barcodeData}
             }
 
             return `            [
-                'productName' => '${(product.productName || '').replace(/'/g, "\\'")}',
-                'productCode' => '${(product.productCode || '').replace(/'/g, "\\'")}',
+                'productName' => '${esc(product.productName)}',
+                'productCode' => '${esc(product.productCode)}',
                 'hierarchy' => ${hierarchyStr}
             ]`;
         }).join(',\n');
@@ -582,7 +643,7 @@ ${addFfData}
         ];
 
         foreach ($addFormFactors as $p) {
-            $productName = $p['productName'];
+            $productName = trim($p['productName']);
             $hierarchyCount = count($p['hierarchy']);
 
             $product = NutritionProductType::where('${C.NAME}', $productName)->first();
@@ -593,7 +654,7 @@ ${addFfData}
             }
 
             $innerFf = $p['hierarchy'][0];
-            $itemBarcode = !empty($p['productCode']) ? $p['productCode'] : $innerFf['barcode'];
+            $itemBarcode = !empty(trim($p['productCode'])) ? trim($p['productCode']) : trim($innerFf['barcode']);
             $innerFfId = DB::table('nutrition_product_form_factor_types')->where('name', $innerFf['name'])->value('id') ?? 1;
 
             $nptItem = NutritionProductTypeItem::create([
@@ -616,7 +677,7 @@ ${addFfData}
                     '${C.FF_TYPE_ID}' => $ffTypeId,
                     '${C.ITEM_ID}' => $nptItem->${C.ITEM_ID},
                     '${C.FF_PARENT}' => $parentId,
-                    '${C.FF_BARCODE}' => $ff['barcode'],
+                    '${C.FF_BARCODE}' => trim($ff['barcode']),
                     '${C.FF_QTY}' => $ff['quantity'],
                     '${C.IS_PROTECTED}' => 1,
                     'formfactorActive' => 1,
@@ -637,6 +698,23 @@ ${addFfData}
                 ]);
             }
 
+            // Insert audit record into nutrition_product_types_history
+            NutritionProductTypeHistory::create([
+                'fthistBarcode'            => $itemBarcode ?: $product->${C.BARCODE},
+                'fthistFormulaID'          => $product->${C.ID},
+                'fthistAction'             => 9001,
+                'fthistDateTime'           => Carbon::now(),
+                'fthistUser'               => 1,
+                'fthistName'               => $product->${C.NAME},
+                'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
+                'fthistType'               => $product->${C.TYPE},
+                'fthistCategoryID'         => $product->${C.CATEGORY},
+                'fthistMeasurementUnit'    => $product->${C.UOM},
+                'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
+                'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
+                'fthistDisplacement'       => $product->${C.DISPLACEMENT},
+            ]);
+
             $this->command->info("-> Attached new item $itemBarcode to product $productName.");
         }\n`;
     }
@@ -650,11 +728,11 @@ ${addFfData}
             const itemUpdates = [];
             let leafTypeName = null;
 
-            if (selectedFields.includes('newProductCode') && u.newProductCode) {
-                itemUpdates.push(`'${C.ITEM_CODE}' => '${u.newProductCode.replace(/'/g, "\\'")}'`);
+            if (selectedFields.includes('newProductCode') && esc(u.newProductCode)) {
+                itemUpdates.push(`'${C.ITEM_CODE}' => '${esc(u.newProductCode)}'`);
             }
-            if (selectedFields.includes('itemName') && u.itemName) {
-                itemUpdates.push(`'formtypeitemName' => '${u.itemName.replace(/'/g, "\\'")}'`);
+            if (selectedFields.includes('itemName') && esc(u.itemName)) {
+                itemUpdates.push(`'formtypeitemName' => '${esc(u.itemName)}'`);
             }
             if (selectedFields.includes('leafContainerType') && u.leafContainerType) {
                 leafTypeName = ffMappings[u.leafContainerType] || 'Bottle';
@@ -662,8 +740,8 @@ ${addFfData}
             if (selectedFields.includes('measurementVolume')) {
                 itemUpdates.push(`'${C.ITEM_VOL}' => ${parseFloat(u.measurementVolume) || 0}`);
             }
-            if (selectedFields.includes('measurementUnit') && u.measurementUnit) {
-                itemUpdates.push(`'${C.UOM}' => '${u.measurementUnit.replace(/'/g, "\\'")}'`);
+            if (selectedFields.includes('measurementUnit') && esc(u.measurementUnit)) {
+                itemUpdates.push(`'${C.UOM}' => '${esc(u.measurementUnit)}'`);
             }
             if (selectedFields.includes('itemActive') && u.itemActive !== undefined && u.itemActive !== '') {
                 itemUpdates.push(`'formtypeitemActive' => ${parseInt(u.itemActive, 10) ? 1 : 0}`);
@@ -675,19 +753,19 @@ ${addFfData}
                     ? parseInt(cu.newQuantity, 10)
                     : 'null';
                 return `[
-                        'target' => '${(cu.target || 'leaf').replace(/'/g, "\\'")}',
-                        'currentBarcode' => '${(cu.currentBarcode || '').replace(/'/g, "\\'")}',
-                        'newTypeName' => '${newTypeName.replace(/'/g, "\\'")}',
-                        'newBarcode' => '${(cu.newBarcode || '').replace(/'/g, "\\'")}',
+                        'target' => '${esc(cu.target || 'leaf')}',
+                        'currentBarcode' => '${esc(cu.currentBarcode)}',
+                        'newTypeName' => '${esc(newTypeName)}',
+                        'newBarcode' => '${esc(cu.newBarcode)}',
                         'newQuantity' => ${newQty}
                     ]`;
             }).join(',\n                    ');
 
             return `            [
-                'productName' => '${(u.productName || '').replace(/'/g, "\\'")}',
-                'productCode' => '${(u.productCode || '').replace(/'/g, "\\'")}',
-                'lookupBarcode' => '${(u.lookupBarcode || '').replace(/'/g, "\\'")}',
-                'leafTypeName' => ${leafTypeName ? `'${leafTypeName.replace(/'/g, "\\'")}'` : 'null'},
+                'productName' => '${esc(u.productName)}',
+                'productCode' => '${esc(u.productCode)}',
+                'lookupBarcode' => '${esc(u.lookupBarcode)}',
+                'leafTypeName' => ${leafTypeName ? `'${esc(leafTypeName)}'` : 'null'},
                 'itemUpdates' => [
                     ${itemUpdates.join(',\n                    ')}
                 ],
@@ -707,22 +785,26 @@ ${updateFfData}
 
         foreach ($updateFormFactors as $u) {
             $productId = null;
-            if (!empty($u['productName'])) {
-                $productId = NutritionProductType::where('${C.NAME}', $u['productName'])->value('${C.ID}');
+            $targetProdName = trim($u['productName']);
+            if (!empty($targetProdName)) {
+                $productId = NutritionProductType::where('${C.NAME}', $targetProdName)->value('${C.ID}');
             }
 
             // 1. Resolve target NutritionProductTypeItem by Item Number or Container Barcode
             $item = null;
-            if (!empty($u['productCode'])) {
-                $itemQuery = NutritionProductTypeItem::where('${C.ITEM_CODE}', $u['productCode']);
+            $targetItemCode = trim($u['productCode']);
+            $targetLookupBc = trim($u['lookupBarcode']);
+
+            if (!empty($targetItemCode)) {
+                $itemQuery = NutritionProductTypeItem::where('${C.ITEM_CODE}', $targetItemCode);
                 if ($productId) {
                     $itemQuery->where('${C.ID}', $productId);
                 }
                 $item = $itemQuery->first();
             }
 
-            if (!$item && !empty($u['lookupBarcode'])) {
-                $ffLookup = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $u['lookupBarcode'])->first();
+            if (!$item && !empty($targetLookupBc)) {
+                $ffLookup = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $targetLookupBc)->first();
                 if ($ffLookup) {
                     $item = NutritionProductTypeItem::where('${C.ITEM_ID}', $ffLookup->${C.ITEM_ID})->first();
                 }
@@ -730,8 +812,9 @@ ${updateFfData}
 
             if (!$item && !empty($u['containerUpdates'])) {
                 foreach ($u['containerUpdates'] as $cu) {
-                    if (!empty($cu['currentBarcode'])) {
-                        $ffLookup = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $cu['currentBarcode'])->first();
+                    $cuCurBc = trim($cu['currentBarcode']);
+                    if (!empty($cuCurBc)) {
+                        $ffLookup = NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $cuCurBc)->first();
                         if ($ffLookup) {
                             $item = NutritionProductTypeItem::where('${C.ITEM_ID}', $ffLookup->${C.ITEM_ID})->first();
                             if ($item) break;
@@ -741,7 +824,7 @@ ${updateFfData}
             }
 
             if (!$item) {
-                $label = $u['productCode'] ?: ($u['lookupBarcode'] ?: $u['productName']);
+                $label = $targetItemCode ?: ($targetLookupBc ?: $targetProdName);
                 $this->command->error("-> Skipped Item/FormFactor Update: Could not resolve item ($label).");
                 continue;
             }
@@ -749,10 +832,12 @@ ${updateFfData}
             $oldLeafTypeId = $item->${C.FF_TYPE_ID};
             $oldItemCode = $item->${C.ITEM_CODE};
             $itemUpdates = $u['itemUpdates'];
+            $historyBarcode = $oldItemCode;
+            $didModify = false;
 
             if (!empty($u['leafTypeName'])) {
                 $newLeafTypeId = DB::table('nutrition_product_form_factor_types')
-                    ->where('name', $u['leafTypeName'])
+                    ->where('name', trim($u['leafTypeName']))
                     ->value('id');
                 if ($newLeafTypeId) {
                     $itemUpdates['${C.FF_TYPE_ID}'] = $newLeafTypeId;
@@ -763,6 +848,8 @@ ${updateFfData}
             if (!empty($itemUpdates)) {
                 $item->update($itemUpdates);
                 $item = $item->fresh();
+                $didModify = true;
+                $historyBarcode = $item->${C.ITEM_CODE};
 
                 // Keep parent product barcode aligned if it mirrored the old item code
                 if (isset($itemUpdates['${C.ITEM_CODE}']) && $oldItemCode !== $itemUpdates['${C.ITEM_CODE}']) {
@@ -785,20 +872,22 @@ ${updateFfData}
             // Sync leaf container type if Item's Leaf Form Factor Type changed
             if ($leafFf && isset($itemUpdates['${C.FF_TYPE_ID}'])) {
                 $leafFf->update(['${C.FF_TYPE_ID}' => $itemUpdates['${C.FF_TYPE_ID}']]);
+                $didModify = true;
             }
 
             // 4. Apply Container-level updates
             foreach ($u['containerUpdates'] as $cu) {
+                $cuCurBc = trim($cu['currentBarcode']);
                 $targetFf = null;
                 if ($cu['target'] === 'leaf') {
                     $targetFf = $leafFf;
                 } elseif ($cu['target'] === 'outer') {
-                    $targetFf = !empty($cu['currentBarcode'])
-                        ? $itemFormFactors->firstWhere('${C.FF_BARCODE}', $cu['currentBarcode'])
+                    $targetFf = !empty($cuCurBc)
+                        ? $itemFormFactors->firstWhere('${C.FF_BARCODE}', $cuCurBc)
                         : $outerFf;
-                } elseif (!empty($cu['currentBarcode'])) {
-                    $targetFf = $itemFormFactors->firstWhere('${C.FF_BARCODE}', $cu['currentBarcode'])
-                        ?? NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $cu['currentBarcode'])->first();
+                } elseif (!empty($cuCurBc)) {
+                    $targetFf = $itemFormFactors->firstWhere('${C.FF_BARCODE}', $cuCurBc)
+                        ?? NutritionProductTypeFormFactor::where('${C.FF_BARCODE}', $cuCurBc)->first();
                 }
 
                 if (!$targetFf) {
@@ -809,14 +898,14 @@ ${updateFfData}
                 $ffUpdates = [];
                 if (!empty($cu['newTypeName'])) {
                     $mappedTypeId = DB::table('nutrition_product_form_factor_types')
-                        ->where('name', $cu['newTypeName'])
+                        ->where('name', trim($cu['newTypeName']))
                         ->value('id');
                     if ($mappedTypeId) {
                         $ffUpdates['${C.FF_TYPE_ID}'] = $mappedTypeId;
                     }
                 }
-                if (!empty($cu['newBarcode'])) {
-                    $ffUpdates['${C.FF_BARCODE}'] = $cu['newBarcode'];
+                if (!empty(trim($cu['newBarcode']))) {
+                    $ffUpdates['${C.FF_BARCODE}'] = trim($cu['newBarcode']);
                 }
                 if ($cu['newQuantity'] !== null) {
                     $ffUpdates['${C.FF_QTY}'] = $cu['newQuantity'];
@@ -824,6 +913,10 @@ ${updateFfData}
 
                 if (!empty($ffUpdates)) {
                     $targetFf->update($ffUpdates);
+                    $didModify = true;
+                    if (isset($ffUpdates['${C.FF_BARCODE}'])) {
+                        $historyBarcode = $ffUpdates['${C.FF_BARCODE}'];
+                    }
 
                     // Keep Item's leaf form factor type synchronized if the leaf container type was updated directly
                     if ($leafFf && $targetFf->id === $leafFf->id && isset($ffUpdates['${C.FF_TYPE_ID}'])) {
@@ -860,6 +953,28 @@ ${updateFfData}
                 }
             }
 
+            // 6. Insert audit record into nutrition_product_types_history when item/form factor changed
+            if ($didModify) {
+                $product = NutritionProductType::find($item->${C.ID});
+                if ($product) {
+                    NutritionProductTypeHistory::create([
+                        'fthistBarcode'            => $historyBarcode ?: $product->${C.BARCODE},
+                        'fthistFormulaID'          => $product->${C.ID},
+                        'fthistAction'             => 9001,
+                        'fthistDateTime'           => Carbon::now(),
+                        'fthistUser'               => 1,
+                        'fthistName'               => $product->${C.NAME},
+                        'fthistOrder'              => $product->${C.ORDER} ?? $product->${C.ID},
+                        'fthistType'               => $product->${C.TYPE},
+                        'fthistCategoryID'         => $product->${C.CATEGORY},
+                        'fthistMeasurementUnit'    => $item->${C.UOM} ?: $product->${C.UOM},
+                        'fthistOpenExpirationDate' => $product->${C.EXP_OPEN},
+                        'fhistBaseCaloricValue'    => $product->${C.BASE_CAL},
+                        'fthistDisplacement'       => $product->${C.DISPLACEMENT},
+                    ]);
+                }
+            }
+
             $this->command->info("-> Updated Item / Form Factors for: " . ($item->formtypeitemName ?: $item->${C.ITEM_CODE}));
         }\n`;
     }
@@ -869,7 +984,7 @@ ${updateFfData}
     // ==========================================
     if (manufacturers.length > 0) {
         let mfgData = manufacturers.map(m => {
-            return `            ['name' => '${(m.manufacturerName || '').replace(/'/g, "\\'")}', 'description' => '${(m.manufacturerDescription || '').replace(/'/g, "\\'")}']`;
+            return `            ['name' => '${esc(m.manufacturerName)}', 'description' => '${esc(m.manufacturerDescription)}']`;
         }).join(',\n');
 
         operationCode += `
@@ -881,22 +996,24 @@ ${mfgData}
         ];
 
         foreach ($addManufacturers as $m) {
+            $mfgName = trim($m['name']);
+            $mfgDesc = trim($m['description']);
             $exists = DB::table('nutrition_product_types_manufacturer')
-                ->where('ManufacturerName', $m['name'])
-                ->orWhere('ManufacturerDescription', $m['description'])
+                ->where('ManufacturerName', $mfgName)
+                ->orWhere('ManufacturerDescription', $mfgDesc)
                 ->exists();
 
             if (!$exists) {
                 DB::table('nutrition_product_types_manufacturer')->insert([
-                    'ManufacturerName' => substr($m['name'], 0, 20),
-                    'ManufacturerDescription' => $m['description'],
+                    'ManufacturerName' => substr($mfgName, 0, 20),
+                    'ManufacturerDescription' => $mfgDesc,
                     'ManufacturerStatus' => 1,
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now()
                 ]);
-                $this->command->info("-> Added new Manufacturer: " . $m['name']);
+                $this->command->info("-> Added new Manufacturer: " . $mfgName);
             } else {
-                $this->command->warn("-> Skipped: Manufacturer " . $m['name'] . " already exists.");
+                $this->command->warn("-> Skipped: Manufacturer " . $mfgName . " already exists.");
             }
         }\n`;
     }
@@ -907,8 +1024,8 @@ ${mfgData}
     if (units.length > 0) {
         let unitData = units.map(u => {
             return `            [
-                'name' => '${(u.unitName || '').replace(/'/g, "\\'")}', 
-                'adt' => '${(u.unitADT || '').replace(/'/g, "\\'")}',
+                'name' => '${esc(u.unitName)}', 
+                'adt' => '${esc(u.unitADT)}',
                 'order' => ${u.unitOrder || 1},
                 'bmVol' => ${u.bmMaxVolume || 0},
                 'formVol' => ${u.formulaMaxVolume || 0},
@@ -927,12 +1044,13 @@ ${unitData}
         ];
 
         foreach ($addUnits as $u) {
-            $exists = DB::table('units')->where('unitName', $u['name'])->exists();
+            $unitName = trim($u['name']);
+            $exists = DB::table('units')->where('unitName', $unitName)->exists();
 
             if (!$exists) {
                 DB::table('units')->insert([
-                    'unitName' => $u['name'],
-                    'unitADTReference' => $u['adt'],
+                    'unitName' => $unitName,
+                    'unitADTReference' => trim($u['adt']),
                     'unitOrder' => $u['order'],
                     'unitCanReceiveDonorMilk' => 1,
                     'unitHospital' => 1,
@@ -945,9 +1063,9 @@ ${unitData}
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now()
                 ]);
-                $this->command->info("-> Added new Unit: " . $u['name']);
+                $this->command->info("-> Added new Unit: " . $unitName);
             } else {
-                $this->command->warn("-> Skipped: Unit " . $u['name'] . " already exists.");
+                $this->command->warn("-> Skipped: Unit " . $unitName . " already exists.");
             }
         }\n`;
     }
@@ -970,10 +1088,10 @@ class ${className} extends Seeder
 {
     public function run()
     {
-        try {
-            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-            DB::beginTransaction();
+        Schema::disableForeignKeyConstraints();
+        DB::beginTransaction();
 
+        try {
             $this->command->info("Starting ${className} Seeder...");
 ${operationCode}
             AutomatedUpdates::insert([
@@ -981,7 +1099,6 @@ ${operationCode}
                 'updateTimestamp' => class_basename($this)
             ]);
 
-            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
             DB::commit();
 
             $this->command->info("========================================");
@@ -989,10 +1106,11 @@ ${operationCode}
             $this->command->info("========================================");
 
         } catch (\\Exception $e) {
-            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
             DB::rollBack();
             $this->command->error("SEEDER FAILED: " . $e->getMessage());
             throw $e;
+        } finally {
+            Schema::enableForeignKeyConstraints();
         }
     }
 }
