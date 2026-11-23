@@ -2,9 +2,11 @@ import { createApp, ref, onMounted, onUnmounted, computed, watch } from '../libs
 import { ready } from "../libs/zpl-renderer.min.js";
 
 import { TimelessEncryption } from './label-core/encryption.js';
-import { printerConfigs, milkBanks, BASE_FACTORY_SIGNATURES, DEMO_PRODUCT_SIGNATURES, sizeOffsets, commonLabelFonts } from './label-core/configs.js';
+import { printerConfigs, milkBanks as defaultMilkBanks, BASE_FACTORY_SIGNATURES, DEMO_PRODUCT_SIGNATURES, sizeOffsets, commonLabelFonts } from './label-core/configs.js';
 import { formatRawLabelCode, getBcType, extractZplBlocks } from './label-core/parserUtils.js';
 import { getMilkBankTemplate } from './label-core/demoTemplates.js';
+import { createMilkBankController } from './label-core/milkBankApi.js';
+import { createActiveProductsController } from './label-core/activeProductsApi.js';
 import { defaultProducts } from '../libs/tms-products.js';
 import { defaultCalibrations } from '../libs/tms-calibrations.js';
 const fakeStorage = {
@@ -144,32 +146,9 @@ const app = createApp({
         const useWidthOverride = ref(false);
         const validationErrors = ref([]);
 
-        const milkBankSearchQuery = ref('Timeless Training'); 
-        const showMilkBankDropdown = ref(false);
-
-        const filteredMilkBanks = computed(() => {
-            const query = milkBankSearchQuery.value.toLowerCase();
-            return milkBanks.filter(b => b.name.toLowerCase().includes(query));
-        });
-
-        const selectMilkBank = (bank) => {
-            demoSettings.value.selectedBankId = bank.id;
-            milkBankSearchQuery.value = bank.name;
-            showMilkBankDropdown.value = false;
-        };
-
-        const handleMilkBankBlur = () => {
-            setTimeout(() => {
-                showMilkBankDropdown.value = false;
-                const currentBank = milkBanks.find(b => b.id === demoSettings.value.selectedBankId);
-                if (currentBank) milkBankSearchQuery.value = currentBank.name;
-            }, 200);
-        };
-
-
         const demoSettings = ref({
             labelType: 'milkbank', 
-            selectedBankId: '0', 
+            selectedBankId: '1', 
             volume: '120',
             calories: '20',
             expiryDate: '2027-03-27',
@@ -181,6 +160,32 @@ const app = createApp({
             milkType: 'Term'
         });
 
+        const {
+            milkBanks,
+            isLoadingMilkBanks,
+            milkBankSourceStatus,
+            showApiSettingsModal,
+            apiBaseUrlInput,
+            apiTokenInput,
+            apiSettingsFeedback,
+            apiSettingsError,
+            milkBankSearchQuery,
+            showMilkBankDropdown,
+            filteredMilkBanks,
+            selectMilkBank,
+            handleMilkBankBlur,
+            syncSelectedMilkBankDisplay,
+            openApiSettingsModal,
+            fetchMilkBanksFromApi,
+            saveAndFetchMilkBanks
+        } = createMilkBankController({
+            ref,
+            computed,
+            demoSettings,
+            defaultMilkBanks,
+            extensionFetch
+        });
+
         const productsData = ref([]); 
         const productSearchQuery = ref('');
         const showProductDropdown = ref(false);
@@ -188,6 +193,34 @@ const app = createApp({
         const pendingProductSelection = ref(null);
 
         const productOverrides = ref(JSON.parse(localStorage.getItem('tms_product_overrides') || '{}'));
+
+        const {
+            isLoadingProducts,
+            productSyncProgress,
+            productSourceStatus,
+            loadInitialProducts,
+            fetchActiveProductsFromApi
+        } = createActiveProductsController({
+            ref,
+            productsData,
+            defaultProducts,
+            productOverrides,
+            extensionFetch,
+            openApiSettingsModal
+        });
+
+        const saveAndSyncNutritionSource = async () => {
+            await saveAndFetchMilkBanks();
+            if (!apiSettingsError.value) {
+                apiSettingsFeedback.value = '⏳ Syncing active products catalog...';
+                const prodOk = await fetchActiveProductsFromApi(false);
+                if (prodOk) {
+                    apiSettingsFeedback.value = `✅ Connected! Synced ${milkBanks.value.length} milk banks & ${productsData.value.length} active products.`;
+                } else {
+                    apiSettingsFeedback.value = `✅ Synced ${milkBanks.value.length} milk banks. (${productSourceStatus.value})`;
+                }
+            }
+        };
 
         const addBarcode = () => {
             if (!pendingProductSelection.value.barcodes) {
@@ -210,15 +243,27 @@ const app = createApp({
                 productsData.value[idx] = pendingProductSelection.value;
             }
 
-            //  FIX: Send to the parent window to save in Chrome Storage!
+            // Persist custom barcodes per productId so API refreshes retain them
+            const updatedOverrides = {
+                ...(productOverrides.value || {}),
+                [pid]: JSON.parse(JSON.stringify(pendingProductSelection.value.barcodes || []))
+            };
+            productOverrides.value = updatedOverrides;
+            const serializedOverrides = JSON.stringify(updatedOverrides);
+            localStorage.setItem('tms_product_overrides', serializedOverrides);
+            window.parent.postMessage({
+                action: 'SAVE_STORAGE',
+                key: 'tms_product_overrides',
+                value: serializedOverrides
+            }, '*');
+
+            const serializedProducts = JSON.stringify(productsData.value);
             window.parent.postMessage({ 
                 action: 'SAVE_STORAGE', 
                 key: 'tms_products', 
-                value: JSON.parse(JSON.stringify(productsData.value)) 
+                value: serializedProducts 
             }, '*');
-            
-            // Also keep a local sandbox copy for instant reloads
-            localStorage.setItem('tms_products', JSON.stringify(productsData.value));
+            localStorage.setItem('tms_products', serializedProducts);
             
             alert("✅ Barcodes saved permanently to browser storage!");
         };
@@ -261,18 +306,8 @@ const app = createApp({
         });
 
         const loadProducts = async () => {
-    try {
-        let stored = localStorage.getItem('tms_products');
-        if (stored && stored.length > 2) {
-            productsData.value = JSON.parse(stored);
-        } else {
-            // Use the imported variable instantly!
-            productsData.value = defaultProducts;
-        }
-    } catch (e) {
-        console.error("Error loading products:", e);
-    }
-    };
+            loadInitialProducts();
+        };
 
         const filteredProducts = computed(() => {
             let list = productsData.value || []; 
@@ -281,7 +316,11 @@ const app = createApp({
                 list = list.filter(p => 
                     (p.name && p.name.toLowerCase().includes(cleanQuery)) || 
                     (p.productId && p.productId.toLowerCase().includes(cleanQuery)) ||
+                    (p.itemId && p.itemId.toLowerCase().includes(cleanQuery)) ||
                     (p.category && p.category.toLowerCase().includes(cleanQuery)) ||
+                    (p.manufacturerName && p.manufacturerName.toLowerCase().includes(cleanQuery)) ||
+                    (p.flavor && p.flavor.toLowerCase().includes(cleanQuery)) ||
+                    (p.formType && p.formType.toLowerCase().includes(cleanQuery)) ||
                     (p.barcodes && p.barcodes.some(b => b.value && b.value.toLowerCase().includes(cleanQuery)))
                 );
             }
@@ -449,6 +488,10 @@ const chooseBarcode = (barcodeVal) => {
                 renderedLabels.value = [];
                 if (codeEditor) codeEditor.setValue('');
                 lastLoadedSignature = null;
+                fetchMilkBanksFromApi(false);
+                if (productsData.value.length <= defaultProducts.length) {
+                    fetchActiveProductsFromApi(false);
+                }
             } else {
                 isListView.value = true;  
             }
@@ -1581,7 +1624,7 @@ const loadRemoteContent = async (file, isBulk = false) => {
 
                     } else {
                         // ... milk banks code starts here ...
-                        const activeBank = milkBanks.find(b => b.id === demoSettings.value.selectedBankId);
+                        const activeBank = (milkBanks.value || []).find(b => String(b.id) === String(demoSettings.value.selectedBankId));
                         const displayFac = activeBank ? activeBank.name : 'Timeless Training';
                         const dbId = activeBank ? activeBank.id : '1';
                         
@@ -3046,6 +3089,11 @@ const loadRemoteContent = async (file, isBulk = false) => {
             
             await loadCalibrations();
             await loadProducts();
+            syncSelectedMilkBankDisplay();
+            fetchMilkBanksFromApi(false);
+            if (productsData.value.length <= defaultProducts.length) {
+                fetchActiveProductsFromApi(false);
+            }
             fetchFiles();
             
             ready.then(({ api }) => { zplLibrary = api; if (codeEditor) triggerRender(); });
@@ -3173,6 +3221,10 @@ const loadRemoteContent = async (file, isBulk = false) => {
             deleteBarcode,
             saveProductOverrides, nukeCache,
             milkBankSearchQuery, showMilkBankDropdown, filteredMilkBanks, selectMilkBank, handleMilkBankBlur,
+            isLoadingMilkBanks, milkBankSourceStatus, fetchMilkBanksFromApi,
+            showApiSettingsModal, apiBaseUrlInput, apiTokenInput, apiSettingsFeedback, apiSettingsError,
+            openApiSettingsModal, saveAndFetchMilkBanks, saveAndSyncNutritionSource,
+            isLoadingProducts, productSyncProgress, productSourceStatus, fetchActiveProductsFromApi,
             isGenerateBlinking,chooseBarcode,isCurrentLabelDemo,returnToGenerator,demoCalibrationRules,allowedBarcodeFormats,
             columnCount
         };

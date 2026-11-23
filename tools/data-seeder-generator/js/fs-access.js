@@ -1,7 +1,43 @@
 /**
  * File System Access Manager
- * Remembers folder permissions permanently and smartly traces paths.
+ * Remembers folder permissions permanently and smartly traces paths with parallel probing & hard timeouts.
  */
+
+const FS_IGNORED_DIRS = new Set([
+    '.git', '.svn', '.hg', '.vscode', '.idea',
+    'node_modules', 'vendor', 'storage', 'cache', 'logs',
+    // OS & system folders (in case a drive root like C:\ or D:\ was selected)
+    'windows', 'program files', 'program files (x86)', 'programdata', 'appdata',
+    'users', 'documents and settings', '$recycle.bin', 'system volume information',
+    'recovery', 'perflogs', 'msocache', 'intel', 'amd', 'nvidia', 'inetpub', 'drivers', 'onedrive',
+    // WAMP / Apache / PHP / MySQL service folders (never contain client Laravel builds)
+    'bin', 'alias', 'apps', 'lang', 'scripts', 'tmp', 'temp', 'sessions',
+    'ssl', 'mariadb', 'mysql', 'php', 'phpmyadmin', 'adminer', 'phpsysinfo',
+    // Standard Laravel internal folders (never contain nested client builds)
+    'app', 'bootstrap', 'config', 'database', 'public', 'resources',
+    'routes', 'tests', 'stubs', 'migrations', 'seeds', 'seeders'
+]);
+
+const APACHE_CONF_ALLOWED_DIRS = new Set([
+    'bin', 'conf', 'extra', 'vhosts', 'sites-enabled', 'sites-available',
+    'etc', 'httpd', 'wamp', 'wamp64', 'laragon', 'xampp', 'local'
+]);
+
+const SEEDER_TAIL_CANDIDATES = [
+    ['vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'],
+    ['vendor', 'timeless', 'customers', 'Database', 'Seeds', 'ClientDataUpdates']
+];
+
+function withFsTimeout(promise, timeoutMs, fallbackValue = null) {
+    let timerId;
+    const timeoutPromise = new Promise(resolve => {
+        timerId = setTimeout(() => resolve(fallbackValue), timeoutMs);
+    });
+    return Promise.race([
+        Promise.resolve(promise).catch(() => fallbackValue).finally(() => clearTimeout(timerId)),
+        timeoutPromise
+    ]);
+}
 
 class FsAccessManager {
     constructor() {
@@ -25,6 +61,7 @@ class FsAccessManager {
             req.onupgradeneeded = () => req.result.createObjectStore(this.storeName);
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
+            req.onblocked = () => reject(new Error('IndexedDB is blocked by another open tab.'));
         });
         return this.dbPromise;
     }
@@ -49,25 +86,44 @@ class FsAccessManager {
         });
     }
 
+    async isSameHandleInList(targetHandle, handleList) {
+        if (!targetHandle || !Array.isArray(handleList)) return false;
+        for (const existing of handleList) {
+            if (!existing) continue;
+            if (existing === targetHandle) return true;
+            if (typeof existing.isSameEntry === 'function') {
+                if (await withFsTimeout(existing.isSameEntry(targetHandle), 250, false)) return true;
+            }
+        }
+        return false;
+    }
+
+    async filterUniqueHandles(handles, excludeHandles = []) {
+        const unique = [];
+        for (const handle of handles || []) {
+            if (!handle) continue;
+            if (await this.isSameHandleInList(handle, excludeHandles)) continue;
+            if (await this.isSameHandleInList(handle, unique)) continue;
+            unique.push(handle);
+        }
+        return unique;
+    }
+
     async getRootHandleWithPermission() {
         const handle = await this.getStoredHandle(this.rootKey);
         if (!handle) return null;
 
-        // If permission is already granted, proceed silently
-        if ((await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
-            return handle;
-        }
-
-        // If permission was dropped (e.g. page refresh), request it again.
-        // This triggers a small browser alert ("Allow site to view files?"), NOT the Windows File Explorer!
         try {
+            if ((await withFsTimeout(handle.queryPermission({ mode: 'readwrite' }), 800, 'denied')) === 'granted') {
+                return handle;
+            }
             if ((await handle.requestPermission({ mode: 'readwrite' })) === 'granted') {
                 return handle;
             }
         } catch (e) {
             console.warn('Permission request failed or dismissed:', e);
         }
-        
+
         return null;
     }
 
@@ -84,11 +140,15 @@ class FsAccessManager {
         const handle = await this.getStoredBuildFolderHandle(buildInfo);
         if (!handle) return null;
 
-        let permission = await handle.queryPermission({ mode: 'readwrite' });
-        if (permission !== 'granted' && requestPermission) {
-            permission = await handle.requestPermission({ mode: 'readwrite' });
+        try {
+            let permission = await withFsTimeout(handle.queryPermission({ mode: 'readwrite' }), 800, 'denied');
+            if (permission !== 'granted' && requestPermission) {
+                permission = await handle.requestPermission({ mode: 'readwrite' });
+            }
+            return permission === 'granted' ? handle : null;
+        } catch {
+            return null;
         }
-        return permission === 'granted' ? handle : null;
     }
 
     async requestBuildFolderPermission(buildInfo) {
@@ -96,7 +156,7 @@ class FsAccessManager {
         if (!handle) return null;
         try {
             return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted' ? handle : null;
-        } catch (error) {
+        } catch {
             return null;
         }
     }
@@ -105,15 +165,15 @@ class FsAccessManager {
         const handles = await this.getStoredHandle(this.buildParentsKey) || [];
         const accessible = [];
         for (const handle of handles) {
-            let permission = await handle.queryPermission({ mode: 'readwrite' });
-            if (permission !== 'granted' && requestPermission) {
-                try {
+            try {
+                let permission = await withFsTimeout(handle.queryPermission({ mode: 'readwrite' }), 600, 'denied');
+                if (permission !== 'granted' && requestPermission) {
                     permission = await handle.requestPermission({ mode: 'readwrite' });
-                } catch (error) {
-                    permission = 'denied';
                 }
+                if (permission === 'granted') accessible.push(handle);
+            } catch {
+                // Skip stale/revoked handles
             }
-            if (permission === 'granted') accessible.push(handle);
         }
         return accessible;
     }
@@ -131,11 +191,30 @@ class FsAccessManager {
     async rememberSharedBuildParent(handle) {
         if (!handle) return;
         const parents = await this.getStoredHandle(this.buildParentsKey) || [];
-        for (const parent of parents) {
-            if (typeof parent.isSameEntry === 'function' && await parent.isSameEntry(handle)) return;
-        }
+        if (await this.isSameHandleInList(handle, parents)) return;
         parents.push(handle);
-        await this.setStoredHandle(this.buildParentsKey, parents);
+        await withFsTimeout(this.setStoredHandle(this.buildParentsKey, parents), 600, null);
+    }
+
+    async resolveSeedersFromProjectHandle(projectHandle) {
+        if (!projectHandle) return null;
+        for (const tail of SEEDER_TAIL_CANDIDATES) {
+            const direct = await this.getDirectoryPath(projectHandle, tail);
+            if (direct) return direct;
+
+            // If Seeds folder exists without ClientDataUpdates yet, create ClientDataUpdates
+            const seedsParent = await this.getDirectoryPath(projectHandle, tail.slice(0, -1));
+            if (seedsParent) {
+                const created = await withFsTimeout(
+                    seedsParent.getDirectoryHandle(tail[tail.length - 1], { create: true }),
+                    500,
+                    null
+                );
+                if (created) return created;
+                return seedsParent;
+            }
+        }
+        return null;
     }
 
     async pickSharedBuildParent(buildInfo, startIn) {
@@ -152,11 +231,9 @@ class FsAccessManager {
         }
 
         const projectFolder = buildInfo.buildFolderName || buildInfo.hostname.replace(/\.local$/i, '');
-        if (!projectFolder) throw new Error('Apache did not provide a project folder name for this URL.');
+        if (!projectFolder) throw new Error('Could not determine a project folder name for this URL.');
         const normalizedFolder = projectFolder.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const seeders = await this.findProjectByFolderName(handle, normalizedFolder, [
-            'vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'
-        ], () => true);
+        const seeders = await this.findProjectByFolderName(handle, normalizedFolder, SEEDER_TAIL_CANDIDATES[0], () => true, true);
         if (!seeders) {
             throw new Error(`Could not find ${projectFolder} beneath the selected parent. Select the common folder that contains your build directories.`);
         }
@@ -181,17 +258,23 @@ class FsAccessManager {
     async getHostsFileWithPermission() {
         const handle = await this.getStoredHandle(this.hostsFileKey);
         if (!handle) return null;
-        return (await handle.queryPermission({ mode: 'read' })) === 'granted' ? handle : null;
+        return (await withFsTimeout(handle.queryPermission({ mode: 'read' }), 600, 'denied')) === 'granted' ? handle : null;
     }
 
     async findHostsIp(hostname, fileHandle) {
         if (!fileHandle) return null;
-        const source = await (await fileHandle.getFile()).text();
-        for (const rawLine of source.split(/\r?\n/)) {
-            const line = rawLine.replace(/#.*/, '').trim();
-            if (!line) continue;
-            const [ip, ...hostnames] = line.split(/\s+/);
-            if (hostnames.some(value => value.toLowerCase() === hostname.toLowerCase())) return ip;
+        try {
+            const file = await withFsTimeout(fileHandle.getFile(), 600, null);
+            if (!file) return null;
+            const source = await withFsTimeout(file.text(), 800, '');
+            for (const rawLine of source.split(/\r?\n/)) {
+                const line = rawLine.replace(/#.*/, '').trim();
+                if (!line) continue;
+                const [ip, ...hostnames] = line.split(/\s+/);
+                if (hostnames.some(value => value.toLowerCase() === hostname.toLowerCase())) return ip;
+            }
+        } catch {
+            return null;
         }
         return null;
     }
@@ -209,9 +292,7 @@ class FsAccessManager {
             throw new Error('Permission denied for the selected build folder.');
         }
 
-        const seedersHandle = await this.getDirectoryPath(handle, [
-            'vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'
-        ]);
+        const seedersHandle = await this.resolveSeedersFromProjectHandle(handle);
         if (!seedersHandle) {
             throw new Error('The selected folder does not contain the expected ClientDataUpdates seeder directory.');
         }
@@ -222,14 +303,12 @@ class FsAccessManager {
 
     async linkRoot() {
         if (!this.isSupported()) throw new Error('Browser not supported.');
-        
-        // This opens Windows Explorer ONLY on the very first time.
-        // id: 'wamp-root' forces Windows to remember the folder you picked for next time.
-        const handle = await window.showDirectoryPicker({ 
+
+        const handle = await window.showDirectoryPicker({
             id: 'wamp-root',
-            mode: 'readwrite' 
+            mode: 'readwrite'
         });
-        
+
         if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
             throw new Error('Permission denied.');
         }
@@ -257,28 +336,55 @@ class FsAccessManager {
     async getVhostRootWithPermission() {
         const handle = await this.getStoredHandle(this.vhostRootKey);
         if (!handle) return null;
-        return (await handle.queryPermission({ mode: 'read' })) === 'granted' ? handle : null;
+        return (await withFsTimeout(handle.queryPermission({ mode: 'read' }), 600, 'denied')) === 'granted' ? handle : null;
     }
 
-    async findVhostDocumentRoot(hostname, configRoot, buildInfo, hostsIp = null) {
+    async readDirectoryEntriesBounded(dirHandle, maxEntries = 200, timeoutMs = 800) {
+        const collector = (async () => {
+            const items = [];
+            let count = 0;
+            for await (const pair of dirHandle.entries()) {
+                items.push(pair);
+                if (++count >= maxEntries) break;
+            }
+            return items;
+        })();
+        return withFsTimeout(collector, timeoutMs, []);
+    }
+
+    isApacheConfigSubdir(folderName) {
+        const lower = folderName.toLowerCase();
+        if (APACHE_CONF_ALLOWED_DIRS.has(lower)) return true;
+        return /^apache/i.test(lower) || /^wamp/i.test(lower) || /^httpd/i.test(lower) || /^vhosts?/i.test(lower);
+    }
+
+    async findVhostDocumentRoot(hostname, configRoot, buildInfo, hostsIp = null, isCurrentRun = () => true, onProgress = null) {
         if (!configRoot) return null;
 
         const queue = [{ handle: configRoot, depth: 0 }];
-        const maxDepth = 6;
-        const maxDirectories = 1000;
-        const maxConfigFiles = 1000;
-        const ignoredFolders = new Set(['.git', 'logs', 'modules']);
+        const maxDepth = 4;
+        const maxDirectories = 40;
+        const maxConfigFiles = 40;
+        const deadline = Date.now() + 1500;
         const candidates = [];
         let visitedDirectories = 0;
         let visitedFiles = 0;
+        let index = 0;
 
-        while (queue.length && visitedDirectories < maxDirectories && visitedFiles < maxConfigFiles) {
-            const current = queue.shift();
+        while (index < queue.length && visitedDirectories < maxDirectories && visitedFiles < maxConfigFiles) {
+            if (!isCurrentRun() || Date.now() > deadline) break;
+            const current = queue[index++];
             visitedDirectories += 1;
 
-            for await (const [name, entry] of current.handle.entries()) {
+            if (typeof onProgress === 'function' && (visitedDirectories === 1 || visitedDirectories % 10 === 0)) {
+                onProgress(`Checking Apache vhosts in ${current.handle.name}...`);
+            }
+
+            const entries = await this.readDirectoryEntriesBounded(current.handle, 120, 600);
+            for (const [name, entry] of entries) {
+                if (!isCurrentRun() || Date.now() > deadline) break;
                 if (entry.kind === 'directory') {
-                    if (current.depth < maxDepth && !ignoredFolders.has(name.toLowerCase())) {
+                    if (current.depth < maxDepth && !FS_IGNORED_DIRS.has(name.toLowerCase()) && this.isApacheConfigSubdir(name)) {
                         queue.push({ handle: entry, depth: current.depth + 1 });
                     }
                     continue;
@@ -286,12 +392,10 @@ class FsAccessManager {
 
                 if (entry.kind !== 'file' || !/\.conf$/i.test(name)) continue;
                 visitedFiles += 1;
-                let source;
-                try {
-                    source = await (await entry.getFile()).text();
-                } catch (error) {
-                    continue;
-                }
+                const fileObj = await withFsTimeout(entry.getFile(), 400, null);
+                if (!fileObj) continue;
+                const source = await withFsTimeout(fileObj.text(), 400, '');
+                if (!source) continue;
 
                 const uncommented = source.replace(/^\s*#.*$/gm, '');
                 const blocks = uncommented.matchAll(/<VirtualHost\b[^>]*>([\s\S]*?)<\/VirtualHost\s*>/gi);
@@ -322,9 +426,9 @@ class FsAccessManager {
                     const hostnameParts = hostname.split('.');
                     const expanded = value.replace(/%%|%(-?\d+)(\+)?/g, (token, part, remainder) => {
                         if (token === '%%') return '%';
-                        const index = Number(part);
-                        if (index === 0) return hostname;
-                        const hostnameIndex = index > 0 ? index - 1 : hostnameParts.length + index;
+                        const idx = Number(part);
+                        if (idx === 0) return hostname;
+                        const hostnameIndex = idx > 0 ? idx - 1 : hostnameParts.length + idx;
                         const selectedParts = hostnameParts.slice(hostnameIndex, remainder ? undefined : hostnameIndex + 1);
                         return selectedParts.join('.');
                     }).replace(/[\\/]+$/, '');
@@ -349,21 +453,62 @@ class FsAccessManager {
         return candidates[0].path;
     }
 
-    async getSeedersDirHandle(buildInfo, rootHandle, isCurrentRun = () => true, documentRoot = '') {
+    async isLaravelProjectDir(dirHandle) {
+        const fileHandle = await withFsTimeout(dirHandle.getFileHandle('artisan', { create: false }), 250, null);
+        return Boolean(fileHandle);
+    }
+
+    getDirectCandidateSegments(rootHandle, buildInfo) {
+        const buildFolder = buildInfo.buildFolderName || buildInfo.hostname.replace(/\.local$/i, '') || `${buildInfo.clientName}-${buildInfo.version}`;
+        const qLower = buildInfo.quarter.toLowerCase();
+        const rootLower = (rootHandle.name || '').toLowerCase();
+
+        const quarterVariants = [`version7-${qLower}`, `v7-${qLower}`, qLower];
+        const buildFolderVariants = [buildFolder];
+        if (buildInfo.hostname && buildInfo.hostname !== buildFolder) {
+            buildFolderVariants.push(buildInfo.hostname);
+        }
+
+        let basePrefixes;
+        if (rootLower === 'local' || rootLower === 'htdocs') {
+            basePrefixes = [[]];
+        } else if (rootLower === 'www') {
+            basePrefixes = [['local'], []];
+        } else if (rootLower === 'wamp64' || rootLower === 'wamp') {
+            basePrefixes = [['www', 'local'], ['www'], []];
+        } else if (/^(?:version7-|v7-)?q[1-4]$/.test(rootLower)) {
+            basePrefixes = [[]];
+        } else {
+            basePrefixes = [[], ['www', 'local'], ['wamp64', 'www', 'local'], ['local'], ['www']];
+        }
+
+        const candidates = [];
+        for (const prefix of basePrefixes) {
+            for (const qFolder of quarterVariants) {
+                for (const bFolder of buildFolderVariants) {
+                    candidates.push([...prefix, qFolder, bFolder]);
+                }
+            }
+            for (const bFolder of buildFolderVariants) {
+                candidates.push([...prefix, bFolder]);
+            }
+        }
+        candidates.push([]);
+        return candidates;
+    }
+
+    async getSeedersDirHandle(buildInfo, rootHandle, isCurrentRun = () => true, documentRoot = '', onProgress = null) {
         if (!rootHandle) return null;
 
         const buildFolder = buildInfo.buildFolderName || buildInfo.hostname.replace(/\.local$/i, '') || `${buildInfo.clientName}-${buildInfo.version}`;
-        const quarterFolder = `version7-${buildInfo.quarter.toLowerCase()}`;
-        const tail = ['vendor', 'timeless', 'customers', 'src', 'Database', 'Seeds', 'ClientDataUpdates'];
+        const qLower = buildInfo.quarter.toLowerCase();
+        const tail = SEEDER_TAIL_CANDIDATES[0];
 
         const tryPath = async (startHandle, segments) => {
             let currentDir = startHandle;
             for (const segment of segments) {
-                try {
-                    currentDir = await currentDir.getDirectoryHandle(segment, { create: false });
-                } catch (error) {
-                    return null;
-                }
+                currentDir = await withFsTimeout(currentDir.getDirectoryHandle(segment, { create: false }), 400, null);
+                if (!currentDir) return null;
             }
             return currentDir;
         };
@@ -371,17 +516,14 @@ class FsAccessManager {
         const normalizedBuildName = buildFolder.toLowerCase().replace(/[^a-z0-9]/g, '');
         const normalizedClient = buildInfo.clientName.toLowerCase().replace(/[^a-z0-9]/g, '');
         const normalizedVersion = buildInfo.version.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const ignoredFolders = new Set(['.git', 'node_modules', 'storage', 'cache', 'logs']);
-        const maxDepth = 8;
-        const maxDirectories = 2000;
-        const maxEntriesPerDirectory = 500;
         const getRelativePath = segments => segments.length ? segments.join('\\') : rootHandle.name;
-        const makeResult = (handle, segments) => ({
+        const makeResult = (handle, segments, parentHandle = rootHandle) => ({
             handle,
+            parentHandle,
             relativePath: getRelativePath(segments)
         });
 
-        if (/^version7-q[1-4]$/i.test(rootHandle.name) && rootHandle.name.toLowerCase() !== quarterFolder) {
+        if (/^(?:version7-|v7-)?q[1-4]$/i.test(rootHandle.name) && !rootHandle.name.toLowerCase().endsWith(qLower)) {
             return null;
         }
 
@@ -394,116 +536,153 @@ class FsAccessManager {
             const rootSegmentIndex = projectSegments.findIndex(segment => segment.toLowerCase() === rootHandle.name.toLowerCase());
             if (rootSegmentIndex >= 0) {
                 const relativeSegments = projectSegments.slice(rootSegmentIndex + 1);
-                const directHandle = await tryPath(rootHandle, [...relativeSegments, ...tail]);
+                const projectHandle = await tryPath(rootHandle, relativeSegments);
+                const directHandle = await this.resolveSeedersFromProjectHandle(projectHandle);
                 if (directHandle) return makeResult(directHandle, relativeSegments);
             }
 
             const documentFolderName = projectSegments[projectSegments.length - 1] || '';
             const normalizedDocumentFolder = documentFolderName.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (normalizedDocumentFolder) {
-                const preferred = await this.findProjectByFolderName(rootHandle, normalizedDocumentFolder, tail, isCurrentRun);
+                const preferred = await this.findProjectByFolderName(
+                    rootHandle,
+                    normalizedDocumentFolder,
+                    tail,
+                    isCurrentRun,
+                    true,
+                    { onProgress }
+                );
                 if (preferred) return preferred;
             }
             return null;
         }
 
-        // Check the expected layouts before traversing a potentially large linked root.
-        const directPaths = [
-            { segments: ['www', 'local', quarterFolder, buildFolder] },
-            { segments: ['www', 'local', buildFolder] },
-            { segments: ['local', quarterFolder, buildFolder] },
-            { base: rootHandle, segments: [quarterFolder, buildFolder], relative: [quarterFolder, buildFolder] },
-            { base: rootHandle, segments: [buildFolder], relative: [buildFolder] },
-            { base: rootHandle, segments: tail, relative: [] }
-        ];
-        for (const candidate of directPaths) {
-            if (!isCurrentRun()) return null;
-            const base = candidate.base || rootHandle;
-            const handle = await tryPath(base, [...candidate.segments, ...tail]);
-            if (handle) {
-                const relative = candidate.relative || candidate.segments;
-                if (relative.length === 0) {
-                    const normalizedRootName = rootHandle.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    if (!normalizedRootName.includes(normalizedClient) || !normalizedRootName.includes(normalizedVersion)) continue;
-                }
-                const parentHandle = candidate.segments.length
-                    ? await tryPath(base, candidate.segments.slice(0, -1))
-                    : rootHandle;
-                if (parentHandle) await this.rememberSharedBuildParent(parentHandle);
-                return {
-                    ...makeResult(handle, relative),
-                    parentHandle: parentHandle || rootHandle
-                };
-            }
+        // 1. Parallel O(1) Direct Probing across common layouts (resolves in 1 round-trip)
+        if (typeof onProgress === 'function') {
+            onProgress(`Checking direct paths in ${rootHandle.name}...`);
         }
 
-        const exactBuild = await this.findProjectByFolderName(
-            rootHandle,
-            normalizedBuildName,
-            tail,
-            isCurrentRun,
-            true
+        const directCandidates = this.getDirectCandidateSegments(rootHandle, buildInfo);
+        const probeResults = await Promise.all(
+            directCandidates.map(async (segments) => {
+                if (!isCurrentRun()) return null;
+                if (segments.length === 0) {
+                    const normalizedRootName = rootHandle.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (!normalizedRootName.includes(normalizedClient) || !normalizedRootName.includes(normalizedVersion)) {
+                        return null;
+                    }
+                }
+                const projectHandle = segments.length ? await tryPath(rootHandle, segments) : rootHandle;
+                if (!projectHandle) return null;
+                const seedersHandle = await this.resolveSeedersFromProjectHandle(projectHandle);
+                if (!seedersHandle) return null;
+                return { segments, seedersHandle };
+            })
         );
-        if (exactBuild) return exactBuild;
 
-        const queue = [{ handle: rootHandle, segments: [], depth: 0 }];
-        const matches = [];
+        const matchedProbe = probeResults.find(Boolean);
+        if (matchedProbe) {
+            if (!isCurrentRun()) return null;
+            const parentHandle = matchedProbe.segments.length
+                ? await tryPath(rootHandle, matchedProbe.segments.slice(0, -1))
+                : rootHandle;
+            if (parentHandle) await this.rememberSharedBuildParent(parentHandle);
+            return makeResult(matchedProbe.seedersHandle, matchedProbe.segments, parentHandle || rootHandle);
+        }
+
+        // 2. Bounded shallow BFS across sibling/quarter directories (for folders with extra suffixes like client-v7-4-2-1)
+        const queue = [{ handle: rootHandle, parentHandle: rootHandle, segments: [], depth: 0 }];
+        const partialMatches = [];
+        const maxDepth = 3;
+        const maxDirectories = 80;
+        const deadline = Date.now() + 2000;
         let visited = 0;
         let index = 0;
 
         while (index < queue.length && visited < maxDirectories) {
-            if (!isCurrentRun()) return null;
+            if (!isCurrentRun() || Date.now() > deadline) break;
             const current = queue[index++];
             visited += 1;
 
             const currentName = current.segments[current.segments.length - 1] || rootHandle.name;
-            const normalizedName = currentName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const matchesBuild = normalizedName === normalizedBuildName ||
-                (normalizedName.includes(normalizedClient) && normalizedName.includes(normalizedVersion));
+            if (typeof onProgress === 'function' && (visited === 1 || visited % 5 === 0)) {
+                onProgress(`Scanning ${rootHandle.name} (${visited} folders)...`);
+            }
 
-            if (matchesBuild) {
-                const seedersHandle = await tryPath(current.handle, tail);
+            const normalizedName = currentName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const isExactMatch = normalizedName === normalizedBuildName;
+            const isPrefixOrVersionMatch = !isExactMatch && (
+                normalizedName.startsWith(normalizedBuildName) ||
+                (normalizedName.includes(normalizedClient) && normalizedName.includes(normalizedVersion))
+            );
+
+            if (isExactMatch || isPrefixOrVersionMatch) {
+                const seedersHandle = await this.resolveSeedersFromProjectHandle(current.handle);
                 if (seedersHandle) {
-                    matches.push(makeResult(seedersHandle, current.segments));
-                    if (normalizedName === normalizedBuildName) return matches[0];
+                    await this.rememberSharedBuildParent(current.parentHandle);
+                    const result = makeResult(seedersHandle, current.segments, current.parentHandle);
+                    if (isExactMatch) return result;
+                    partialMatches.push(result);
                     continue;
                 }
             }
 
+            // Do not descend into sibling Laravel projects (their subfolders never contain another build)
+            if (current.depth > 0 && await this.isLaravelProjectDir(current.handle)) {
+                continue;
+            }
+
             if (current.depth >= maxDepth) continue;
-            let entriesRead = 0;
-            for await (const [name, entry] of current.handle.entries()) {
-                if (entriesRead++ >= maxEntriesPerDirectory) break;
-                if (entry.kind !== 'directory' || ignoredFolders.has(name.toLowerCase())) continue;
-                if (name.toLowerCase() === 'vendor') continue;
+
+            const entries = await this.readDirectoryEntriesBounded(current.handle, 150, 600);
+            for (const [name, entry] of entries) {
+                if (!isCurrentRun() || Date.now() > deadline) break;
+                if (entry.kind !== 'directory') continue;
+                const lower = name.toLowerCase();
+                if (FS_IGNORED_DIRS.has(lower)) continue;
+                // Skip other quarter folders when searching for a specific quarter
+                if (/^(?:version7-|v7-)?q[1-4]$/i.test(lower) && !lower.endsWith(qLower)) continue;
+
                 queue.push({
                     handle: entry,
+                    parentHandle: current.handle,
                     segments: [...current.segments, name],
                     depth: current.depth + 1
                 });
             }
         }
 
-        return matches.length === 1 ? matches[0] : null;
+        return partialMatches.length === 1 ? partialMatches[0] : null;
     }
 
-    async findProjectByFolderName(rootHandle, normalizedFolderName, tail, isCurrentRun, stopAtFirst = false) {
-        const queue = [{ handle: rootHandle, segments: [], depth: 0 }];
-        const ignoredFolders = new Set(['.git', 'node_modules', 'storage', 'cache', 'logs']);
+    async findProjectByFolderName(rootHandle, normalizedFolderName, tail, isCurrentRun = () => true, stopAtFirst = false, options = {}) {
+        const onProgress = options.onProgress || null;
+        const queue = [{ handle: rootHandle, parentHandle: rootHandle, segments: [], depth: 0 }];
         const matches = [];
+        const maxDepth = 4;
+        const maxDirectories = 100;
+        const deadline = Date.now() + 2500;
+        const requireSeederTail = Array.isArray(tail) && tail.length > 0;
         let visited = 0;
         let index = 0;
 
-        while (index < queue.length && visited < 2000) {
-            if (!isCurrentRun()) return null;
+        while (index < queue.length && visited < maxDirectories) {
+            if (!isCurrentRun() || Date.now() > deadline) return null;
             const current = queue[index++];
             visited += 1;
+
+            if (typeof onProgress === 'function' && (visited === 1 || visited % 5 === 0)) {
+                onProgress(`Scanning ${rootHandle.name} (${visited} folders)...`);
+            }
+
             const name = current.segments[current.segments.length - 1] || rootHandle.name;
             if (name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedFolderName) {
-                const handle = await this.getDirectoryPath(current.handle, tail);
+                const handle = requireSeederTail
+                    ? await this.resolveSeedersFromProjectHandle(current.handle)
+                    : current.handle;
                 if (handle) {
                     const parentHandle = current.parentHandle || rootHandle;
-                    await this.rememberSharedBuildParent(parentHandle);
+                    if (requireSeederTail) await this.rememberSharedBuildParent(parentHandle);
                     const match = {
                         handle,
                         parentHandle,
@@ -512,13 +691,21 @@ class FsAccessManager {
                     };
                     if (stopAtFirst) return match;
                     matches.push(match);
+                    continue;
                 }
             }
-            if (current.depth >= 8) continue;
-            let entriesRead = 0;
-            for await (const [entryName, entry] of current.handle.entries()) {
-                if (entriesRead++ >= 500) break;
-                if (entry.kind !== 'directory' || ignoredFolders.has(entryName.toLowerCase()) || entryName.toLowerCase() === 'vendor') continue;
+
+            if (current.depth > 0 && await this.isLaravelProjectDir(current.handle)) {
+                continue;
+            }
+
+            if (current.depth >= maxDepth) continue;
+
+            const entries = await this.readDirectoryEntriesBounded(current.handle, 150, 600);
+            for (const [entryName, entry] of entries) {
+                if (!isCurrentRun() || Date.now() > deadline) break;
+                if (entry.kind !== 'directory') continue;
+                if (FS_IGNORED_DIRS.has(entryName.toLowerCase())) continue;
                 queue.push({
                     handle: entry,
                     parentHandle: current.handle,
@@ -533,18 +720,16 @@ class FsAccessManager {
     async getDirectoryPath(startHandle, segments) {
         let current = startHandle;
         for (const segment of segments) {
-            try {
-                current = await current.getDirectoryHandle(segment, { create: false });
-            } catch (error) {
-                return null;
-            }
+            current = await withFsTimeout(current.getDirectoryHandle(segment, { create: false }), 400, null);
+            if (!current) return null;
         }
         return current;
     }
 
     async getHighestSeederNumber(dirHandle) {
         let highest = 0;
-        for await (const [name, entry] of dirHandle.entries()) {
+        const entries = await this.readDirectoryEntriesBounded(dirHandle, 1000, 1200);
+        for (const [name, entry] of entries) {
             if (entry.kind !== 'file') continue;
             const match = name.match(/^DATA(\d+)\.php$/i);
             if (match) {

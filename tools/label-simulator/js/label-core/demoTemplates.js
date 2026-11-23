@@ -15,7 +15,7 @@ export function getMilkBankTemplate(bankName, ctx) {
 
     let zplCode = '';
 
-    if (bankName === "The New York Milk Bankn Inc." || bankName === "The New York Milk Bank") {
+    if (bankName === "The New York Milk Bank, Inc." || bankName === "The New York Milk Bankn Inc." || bankName === "The New York Milk Bank") {
         const humanDate = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
         zplCode += `D10\r\n` +
                    `q406\r\n` +

@@ -246,7 +246,19 @@ window.addEventListener('message', (event) => {
 });
 frame.onload = () => {
     chrome.storage.local.get(null, (allData) => {
-        frame.contentWindow.postMessage({ action: 'SYNC_STORAGE', data: allData || {} }, '*');
+        const mergedData = { ...(allData || {}) };
+        if (!mergedData.tms_api_config) {
+            try {
+                const sharedApiConfig = window.localStorage.getItem('tms_api_config');
+                if (sharedApiConfig) {
+                    mergedData.tms_api_config = sharedApiConfig;
+                    chrome.storage.local.set({ tms_api_config: sharedApiConfig });
+                }
+            } catch (e) {
+                console.warn('Could not read shared tms_api_config from localStorage:', e);
+            }
+        }
+        frame.contentWindow.postMessage({ action: 'SYNC_STORAGE', data: mergedData }, '*');
     });
 };
 
@@ -289,6 +301,13 @@ window.addEventListener('message', async (event) => {
     // 1. Storage Saves
     if (event.data.action === 'SAVE_STORAGE') {
         chrome.storage.local.set({ [event.data.key]: event.data.value });
+        if (event.data.key === 'tms_api_config') {
+            try {
+                window.localStorage.setItem('tms_api_config', event.data.value);
+            } catch (e) {
+                console.warn('Could not mirror tms_api_config to localStorage:', e);
+            }
+        }
     }
     // Return to the dashboard selection page from the outer shell.
     if (event.data.action === 'GO_DASHBOARD') {

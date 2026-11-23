@@ -8,7 +8,7 @@
           data-encryption-key="1LQHS67FJ8X3-O0Z5IYK9B4VDWGTEP_MUCANR2"
           data-qa-api-key="tms-qa-super-secret-key-2026">
 
-    <title><h1 id="secret-trigger" class="text-xl font-bold cursor-pointer">TMS Virtual Label Simulator</h1></title>
+    <title>TMS Virtual Label Simulator</title>
 
     <script src="./js/shield.js"></script>
     <script src="./libs/qz-tray.min.js"></script>
@@ -24,12 +24,13 @@
         <img src="../../assets/icons/icon48.png" alt="TMS Logo" class="brand-logo" style="mix-blend-mode: multiply;" />
         <!-- <h1>TMS Virtual Label Simulator & Barcode Generator</h1> -->
         <h1 id="secret-trigger" class="text-xl font-bold cursor-pointer">TMS Virtual Label Simulator</h1>
-        <div id="privacy-badge" class="privacy-indicator">
+        <div id="privacy-badge" class="privacy-indicator" style="display: flex; align-items: center; gap: 10px;">
             <span v-if="isDeveloperMode" style="background-color: #ef4444; color: white; padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: bold;">
                 🛠️ DEV MODE ACTIVE
             </span>
-            <!-- <div class="status-dot dot-offline"></div> -->
-            <!-- <span>100% Local Processing (HIPAA Secure)</span> -->
+            <button type="button" @click="openApiSettingsModal()" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                ⚙️ API Settings
+            </button>
         </div>
     </div>
     
@@ -67,20 +68,45 @@
                     <div class="tms-card-body">
                         <template v-if="demoSettings.labelType === 'product'">
                             <div class="tms-input-wrapper" style="z-index: 101;">
-                                <label>Search Product Database</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px;">
+                                    <label style="margin: 0;">Search Product Database</label>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <button type="button"
+                                                @click="fetchActiveProductsFromApi(true)"
+                                                :disabled="isLoadingProducts"
+                                                title="Refresh Active Products list from Nutrition Source API"
+                                                style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;">
+                                            {{ isLoadingProducts ? '⏳ Syncing...' : '🔄 Refresh API' }}
+                                        </button>
+                                        <button type="button"
+                                                @click="openApiSettingsModal()"
+                                                title="Configure Nutrition Source API Base URL & Token"
+                                                style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;">
+                                            ⚙️ Token
+                                        </button>
+                                    </div>
+                                </div>
                                 <input type="text" 
                                        v-model="productSearchQuery" 
                                        @focus="$event.target.select(); showProductDropdown = true" 
                                        @input="showProductDropdown = true" 
                                        class="tms-text-input" 
-                                       :placeholder="productsData.length > 0 ? `Search ${productsData.length} products...` : '⚠️ Loading database...'">
+                                       :placeholder="productsData.length > 0 ? `Search ${productsData.length} products by name, item #, or barcode...` : '⚠️ Loading database...'">
+                                <div v-if="isLoadingProducts && productSyncProgress > 0" style="background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden; width: 100%; margin-top: 6px;">
+                                    <div :style="{ width: productSyncProgress + '%', height: '100%', background: '#0d9488', transition: 'width 0.2s ease' }"></div>
+                                </div>
+                                <div v-if="productSourceStatus" style="font-size: 0.72rem; color: #64748b; margin-top: 4px;">
+                                    {{ productSourceStatus }}
+                                </div>
                                 
                                 <div v-if="showProductDropdown" @click="showProductDropdown = false" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 90;"></div>
                                 
                                 <div v-if="showProductDropdown && filteredProducts.length > 0" class="tms-dropdown-menu">
-                                    <div v-for="prod in filteredProducts" :key="prod.productId + prod.name" @mousedown.prevent="selectProduct(prod)" class="tms-dropdown-item">
+                                    <div v-for="prod in filteredProducts" :key="(prod.itemId || prod.productId) + prod.name" @mousedown.prevent="selectProduct(prod)" class="tms-dropdown-item">
                                         <strong style="color: #0f766e;">[{{ prod.category || 'UNK' }}] {{ prod.name }}</strong> <br>
-                                        <span style="color: #64748b; font-size: 0.75rem;">ID: {{ prod.productId || 'N/A' }} | {{ prod.barcodes ? prod.barcodes.length : 0 }} Barcodes</span>
+                                        <span style="color: #64748b; font-size: 0.75rem;">
+                                            ID: {{ prod.productId || 'N/A' }} | {{ prod.barcodes ? prod.barcodes.length : 0 }} Barcodes<template v-if="prod.formType"> | {{ prod.formType }}</template>
+                                        </span>
                                     </div>
                                 </div>
                                 
@@ -112,19 +138,41 @@
 
                         <template v-if="demoSettings.labelType === 'milkbank'">
                             <div class="tms-input-wrapper" style="z-index: 101;">
-                                <label>Target Milk Bank</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px;">
+                                    <label style="margin: 0;">Target Milk Bank</label>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <button type="button"
+                                                @click="fetchMilkBanksFromApi(true)"
+                                                :disabled="isLoadingMilkBanks"
+                                                title="Refresh Milk Bank list from Nutrition Source API"
+                                                style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;">
+                                            {{ isLoadingMilkBanks ? '⏳ Syncing...' : '🔄 Refresh API' }}
+                                        </button>
+                                        <button type="button"
+                                                @click="openApiSettingsModal()"
+                                                title="Configure Nutrition Source API Base URL & Token"
+                                                style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer;">
+                                            ⚙️ Token
+                                        </button>
+                                    </div>
+                                </div>
                                 <input type="text"
                                        v-model="milkBankSearchQuery"
                                        @focus="showMilkBankDropdown = true; milkBankSearchQuery = ''"
                                        @blur="handleMilkBankBlur"
-                                       placeholder="Search Milk Bank..."
+                                       placeholder="Search Milk Bank by name or shortname..."
                                        class="tms-text-input">
+                                <div v-if="milkBankSourceStatus" style="font-size: 0.72rem; color: #64748b; margin-top: 4px;">
+                                    {{ milkBankSourceStatus }}
+                                </div>
                 
                                 <ul v-if="showMilkBankDropdown" class="tms-dropdown-menu" style="margin: 4px 0 0 0; padding: 0; list-style: none;">
-                                    <li v-for="bank in filteredMilkBanks" :key="bank.id" 
-                                        @click="selectMilkBank(bank)"
-                                        class="tms-dropdown-item">
-                                        {{ bank.name }}
+                                    <li v-for="bank in filteredMilkBanks" :key="bank.uuid || bank.id" 
+                                        @mousedown.prevent="selectMilkBank(bank)"
+                                        class="tms-dropdown-item"
+                                        style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                                        <span>{{ bank.name }}</span>
+                                        <span v-if="bank.shortname" style="font-size: 0.72rem; font-weight: 700; color: #0f766e; background: #ccfbf1; padding: 2px 6px; border-radius: 4px;">{{ bank.shortname }}</span>
                                     </li>
                                     <li v-if="filteredMilkBanks.length === 0" style="padding: 10px; color: #64748b; font-style: italic;">
                                         No matches found.
@@ -634,6 +682,39 @@
 
                 <div style="margin-top: 20px; display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 15px;">
                     <button @click="showBarcodeModal = false" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.backgroundColor='#f1f5f9'; this.style.color='#0f172a'" onmouseout="this.style.backgroundColor='#f8fafc'; this.style.color='#475569'">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nutrition Source API Settings Modal -->
+        <div v-if="showApiSettingsModal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); z-index: 99999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);" v-cloak>
+            <div style="background: white; padding: 24px 28px; border-radius: 10px; width: 480px; max-width: 92%; box-shadow: 0 10px 25px rgba(0,0,0,0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 18px;">
+                    <h3 style="margin: 0; font-size: 1.05rem; color: #0f172a;">Nutrition Source API Settings</h3>
+                    <button type="button" @click="showApiSettingsModal = false" style="background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #64748b;">&times;</button>
+                </div>
+
+                <div class="tms-input-wrapper" style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 6px;">API Base URL</label>
+                    <input type="text" v-model="apiBaseUrlInput" placeholder="https://nutritionsourceqa2.internal.timelessmedical.com" class="tms-text-input">
+                </div>
+
+                <div class="tms-input-wrapper" style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 6px;">Personal Access Token (Bearer)</label>
+                    <input type="password" v-model="apiTokenInput" placeholder="Paste your Bearer token..." class="tms-text-input">
+                </div>
+
+                <div v-if="apiSettingsFeedback" :style="{ background: apiSettingsError ? '#fef2f2' : '#ecfdf5', border: apiSettingsError ? '1px solid #fecaca' : '1px solid #a7f3d0', color: apiSettingsError ? '#b91c1c' : '#065f46', padding: '10px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', marginBottom: '14px' }">
+                    {{ apiSettingsFeedback }}
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" @click="saveAndSyncNutritionSource" :disabled="isLoadingMilkBanks || isLoadingProducts" style="flex: 1; background: #0f766e; border: 1px solid #0f766e; color: white; padding: 10px 14px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">
+                        {{ (isLoadingMilkBanks || isLoadingProducts) ? '⏳ Syncing...' : '💾 Save & Sync Catalog' }}
+                    </button>
+                    <button type="button" @click="showApiSettingsModal = false" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 10px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">
                         Close
                     </button>
                 </div>

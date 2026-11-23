@@ -35,7 +35,7 @@
                         <div class="panel-header">Connection Settings</div>
                         <div class="panel-body">
                             <div class="product-form-group">
-                                <label>Saved Builds</label>
+                                <label for="savedBuildsSelect">Saved Builds</label>
                                 <div class="input-group" style="margin-bottom:0;">
                                     <select id="savedBuildsSelect" class="input-field">
                                         <option value="">Select a saved build...</option>
@@ -45,7 +45,7 @@
                             </div>
 
                             <div class="product-form-group" style="margin-top: 20px;">
-                                <label>Local URL Target *</label>
+                                <label for="localUrl">Local URL Target *</label>
                                 <div class="input-group">
                                     <input type="text" id="localUrl" placeholder="client-v7-3-1 or http://client-v7-3-1.local/" class="input-field">
                                     <button id="detectBuildBtn" class="btn btn-primary">Detect</button>
@@ -55,6 +55,7 @@
                                     <span class="build-search-spinner" aria-hidden="true"></span>
                                     <span id="buildSearchText">Searching build folders...</span>
                                     <span class="build-search-track" aria-hidden="true"><span></span></span>
+                                    <button type="button" id="cancelBuildSearchBtn" class="btn btn-secondary btn-small" style="padding: 2px 8px; font-size: 11px;">Cancel</button>
                                 </div>
                             </div>
                         </div>
@@ -69,7 +70,7 @@
                             <div class="info-row"><label>Quarter:</label><span id="buildQuarter" class="value"></span></div>
                             <div class="info-row"><label>Detected Project Path:</label><span id="buildPath" class="value monospace"></span></div>
                             <div class="info-row" style="margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                                <label>Next Seeder #:</label>
+                                <label for="nextSeederNum">Next Seeder #:</label>
                                 <div class="seeder-num-control">
                                     <span class="data-prefix">DATA</span>
                                     <input type="number" id="nextSeederNum" class="num-input" placeholder="154" min="1">
@@ -107,13 +108,13 @@
                             <div id="liveCatalog-tab" class="form-tab-content">
                                 <div class="product-form-group">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                        <label style="margin: 0;">Search Active Products <span id="apiTotalLoadedCount" style="color: #64748b; font-weight: normal; margin-left: 8px;"></span></label>
+                                        <label for="apiSearchInput" style="margin: 0;">Search External Formulary <span id="apiTotalLoadedCount" style="color: #64748b; font-weight: normal; margin-left: 8px;"></span></label>
                                         <button id="apiLoadCatalogBtn" class="btn btn-secondary btn-small" style="background: #f1f5f9; color: #0f172a; border-color: #cbd5e1;">
                                             ⬇️ Load Products From TMNS
                                         </button>
                                     </div>
                                     <div style="display: flex; gap: 10px;">
-                                        <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, manufacturer, or barcode..." style="flex: 1;" disabled>
+                                        <input type="text" id="apiSearchInput" class="input-field" placeholder="Search by name, item number, or barcode..." style="flex: 1;" disabled>
                                     </div>
 
                                     <div id="apiLoadProgressWrapper" style="display: none; margin-top: 12px;">
@@ -138,7 +139,7 @@
                                             <tbody id="apiResultsBody">
                                                 <tr class="empty-state">
                                                     <td colspan="3" style="text-align:center; padding:50px 20px; color:#94a3b8;">
-                                                        Click "Load Products From TMNS" to fetch active products.
+                                                        Connect to a facility and search to view live products.
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -154,7 +155,7 @@
                             <!-- Manual Tab -->
                             <div class="form-tab-content active" id="manual-tab">
                                 <div class="product-form-group">
-                                    <label>Action Type *</label>
+                                    <label for="actionType">Action Type *</label>
                                     <select id="actionType" class="input-field">
                                         <option value="">Select an action...</option>
                                         <option value="create">Add New Products</option>
@@ -285,20 +286,22 @@
             </div>
 
             <div class="product-form-group">
-                <label>API Base URL</label>
-                <input type="text" id="apiBaseUrl" class="input-field" placeholder="https://nutritionsourceqa2.internal.timelessmedical.com">
+                <label for="apiBaseUrl">API Base URL</label>
+                <input type="text" id="apiBaseUrl" class="input-field" placeholder="https://...">
             </div>
 
             <div class="product-form-group">
-                <label>Personal Access Token (Bearer)</label>
+                <label for="apiToken">Personal Access Token (Bearer)</label>
                 <input type="password" id="apiToken" class="input-field" placeholder="Paste your token here...">
             </div>
 
-            <div id="apiConnectionStatus" class="hidden" style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 10px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 14px;"></div>
+            <button id="testApiConnectionBtn" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">Test Connection & Fetch Facilities</button>
 
-            <div style="display: flex; gap: 10px;">
-                <button id="testApiConnectionBtn" class="btn btn-secondary" style="flex: 1;">Test Connection</button>
-                <button id="saveApiSettingsBtn" class="btn btn-primary" style="flex: 1;">Save Configuration</button>
+            <div id="facilitySelectionWrapper" class="product-form-group hidden" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <label style="color: #10b981;">Connection Successful!</label>
+                <label for="apiFacilitySelect" style="margin-top: 10px;">Select Target Facility</label>
+                <select id="apiFacilitySelect" class="input-field" style="margin-bottom: 15px;"></select>
+                <button id="saveApiSettingsBtn" class="btn btn-primary" style="width: 100%;">Save Configuration</button>
             </div>
         </div>
     </div>
